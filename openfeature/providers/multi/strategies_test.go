@@ -1,14 +1,14 @@
 package multi
 
 import (
-	of "github.com/open-feature/go-sdk/openfeature"
+	of "go.openfeature.dev/openfeature"
 	"go.uber.org/mock/gomock"
 )
 
-func createMockProviders(ctrl *gomock.Controller, count int) []*of.MockFeatureProvider {
-	providerMocks := make([]*of.MockFeatureProvider, 0, count)
+func createMockProviders(ctrl *gomock.Controller, count int) []*of.MockProvider {
+	providerMocks := make([]*of.MockProvider, 0, count)
 	for range count {
-		provider := of.NewMockFeatureProvider(ctrl)
+		provider := of.NewMockProvider(ctrl)
 		providerMocks = append(providerMocks, provider)
 	}
 

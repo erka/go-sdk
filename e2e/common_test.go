@@ -1,8 +1,8 @@
 package e2e_test
 
 import (
-	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/open-feature/go-sdk/openfeature/memprovider"
+	"go.openfeature.dev/openfeature"
+	memprovider "go.openfeature.dev/openfeature/providers/inmemory"
 )
 
 // ctxFunction is a context based evaluation callback

@@ -152,10 +152,10 @@ func TestRequirement_4_3_2(t *testing.T) {
 
 	t.Run("before stage MUST run before flag resolution occurs", func(t *testing.T) {
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -163,7 +163,7 @@ func TestRequirement_4_3_2(t *testing.T) {
 		flagKey := "foo"
 		defaultValue := "bar"
 		evalCtx := EvaluationContext{}
-		flatCtx := flattenContext(evalCtx)
+		flatCtx := evalCtx.Flattened()
 
 		mockProvider.EXPECT().Hooks().AnyTimes()
 
@@ -183,7 +183,7 @@ func TestRequirement_4_3_2(t *testing.T) {
 		mockHook := NewMockHook(ctrl)
 
 		type requirement interface {
-			Before(ctx context.Context, hookContext HookContext, hookHints HookHints) (*EvaluationContext, error)
+			Before(ctx context.Context, hookContext HookContext, hookHints HookHints) (context.Context, *EvaluationContext, error)
 		}
 
 		var hookI any = mockHook
@@ -198,10 +198,10 @@ func TestRequirement_4_3_3(t *testing.T) {
 	t.Cleanup(initSingleton)
 	ctrl := gomock.NewController(t)
 
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 	mockProvider.EXPECT().Metadata().AnyTimes()
 
-	err := SetNamedProviderAndWait(t.Name(), mockProvider)
+	err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -229,7 +229,7 @@ func TestRequirement_4_3_3(t *testing.T) {
 		evaluationContext: evalCtx,
 	}
 	hook1EvalCtxResult := &EvaluationContext{targetingKey: "mockHook1"}
-	mockHook1.EXPECT().Before(gomock.Any(), hook1Ctx, gomock.Any()).Return(hook1EvalCtxResult, nil)
+	mockHook1.EXPECT().Before(gomock.Any(), hook1Ctx, gomock.Any()).Return(t.Context(), hook1EvalCtxResult, nil)
 	mockProvider.EXPECT().StringEvaluation(gomock.Any(), flagKey, defaultValue, map[string]any{
 		"is":         "a test",
 		TargetingKey: "mockHook1",
@@ -258,10 +258,10 @@ func TestRequirement_4_3_4(t *testing.T) {
 	t.Cleanup(initSingleton)
 	ctrl := gomock.NewController(t)
 
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 	mockProvider.EXPECT().Metadata().AnyTimes()
 
-	err := SetNamedProviderAndWait(t.Name(), mockProvider)
+	err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -304,7 +304,7 @@ func TestRequirement_4_3_4(t *testing.T) {
 			"multiplier": 3,
 		},
 	}
-	mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(hookEvalCtxResult, nil)
+	mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), hookEvalCtxResult, nil)
 
 	// assert that the EvaluationContext returned by Before hooks is merged with the invocation EvaluationContext
 	expectedMergedContext := EvaluationContext{
@@ -316,7 +316,7 @@ func TestRequirement_4_3_4(t *testing.T) {
 			"beatsClient":    true,
 		},
 	}
-	mockProvider.EXPECT().StringEvaluation(gomock.Any(), flagKey, defaultValue, flattenContext(expectedMergedContext))
+	mockProvider.EXPECT().StringEvaluation(gomock.Any(), flagKey, defaultValue, expectedMergedContext.Flattened())
 	mockHook.EXPECT().After(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	mockHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
@@ -335,10 +335,10 @@ func TestRequirement_4_3_5(t *testing.T) {
 		t.Cleanup(initSingleton)
 
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -346,7 +346,7 @@ func TestRequirement_4_3_5(t *testing.T) {
 		flagKey := "foo"
 		defaultValue := "bar"
 		evalCtx := EvaluationContext{}
-		flatCtx := flattenContext(evalCtx)
+		flatCtx := evalCtx.Flattened()
 
 		mockProvider.EXPECT().Hooks().AnyTimes()
 
@@ -366,7 +366,7 @@ func TestRequirement_4_3_5(t *testing.T) {
 		mockHook := NewMockHook(ctrl)
 
 		type requirement interface {
-			After(ctx context.Context, hookContext HookContext, flagEvaluationDetails InterfaceEvaluationDetails, hookHints HookHints) error
+			After(ctx context.Context, hookContext HookContext, flagEvaluationDetails EvaluationDetails[FlagTypes], hookHints HookHints) error
 		}
 
 		var hookI any = mockHook
@@ -385,16 +385,16 @@ func TestRequirement_4_3_6(t *testing.T) {
 	flagKey := "foo"
 	defaultValue := "bar"
 	evalCtx := EvaluationContext{}
-	flatCtx := flattenContext(evalCtx)
+	flatCtx := evalCtx.Flattened()
 
 	t.Run("error hook MUST run when errors are encountered in the before stage", func(t *testing.T) {
 		t.Cleanup(initSingleton)
 
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -403,7 +403,7 @@ func TestRequirement_4_3_6(t *testing.T) {
 
 		// assert that the Error hooks are executed after the failed Before hooks
 		mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			After(mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("forced")))
+			After(mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, errors.New("forced")))
 		mockHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
 		_, err = NewClient(t.Name()).StringValueDetails(t.Context(), flagKey, defaultValue, evalCtx, WithHooks(mockHook))
@@ -416,10 +416,10 @@ func TestRequirement_4_3_6(t *testing.T) {
 		t.Cleanup(initSingleton)
 
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -449,10 +449,10 @@ func TestRequirement_4_3_6(t *testing.T) {
 		t.Cleanup(initSingleton)
 
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -494,16 +494,16 @@ func TestRequirement_4_3_7(t *testing.T) {
 	flagKey := "foo"
 	defaultValue := "bar"
 	evalCtx := EvaluationContext{}
-	flatCtx := flattenContext(evalCtx)
+	flatCtx := evalCtx.Flattened()
 
 	t.Run("finally hook MUST run after the before & after stages", func(t *testing.T) {
 		t.Cleanup(initSingleton)
 
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -526,17 +526,17 @@ func TestRequirement_4_3_7(t *testing.T) {
 		t.Cleanup(initSingleton)
 
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
 
 		mockProvider.EXPECT().Hooks().AnyTimes()
 
-		mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("forced"))
+		mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, errors.New("forced"))
 		// assert that the Finally hook runs after the Error stage
 		mockHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			After(mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()))
@@ -551,7 +551,7 @@ func TestRequirement_4_3_7(t *testing.T) {
 		mockHook := NewMockHook(ctrl)
 
 		type requirement interface {
-			Finally(ctx context.Context, hookContext HookContext, flagEvaluationDetails InterfaceEvaluationDetails, hookHints HookHints)
+			Finally(ctx context.Context, hookContext HookContext, flagEvaluationDetails EvaluationDetails[FlagTypes], hookHints HookHints)
 		}
 
 		var hookI any = mockHook
@@ -588,7 +588,7 @@ func TestRequirement_4_4_1(t *testing.T) {
 	})
 
 	t.Run("provider MUST have a method for registering hooks", func(t *testing.T) {
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 
 		type requirement interface {
 			Hooks() []Hook
@@ -605,16 +605,16 @@ func TestRequirement_4_4_1(t *testing.T) {
 
 		// EvaluationOptions contains the hooks registered at invocation
 		type requirement interface {
-			BooleanValue(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) (bool, error)
-			StringValue(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) (string, error)
-			FloatValue(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) (float64, error)
-			IntValue(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) (int64, error)
-			ObjectValue(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (any, error)
+			Boolean(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) bool
+			String(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) string
+			Float(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) float64
+			Int(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) int64
+			Object(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) any
 			BooleanValueDetails(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) (BooleanEvaluationDetails, error)
 			StringValueDetails(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) (StringEvaluationDetails, error)
 			FloatValueDetails(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) (FloatEvaluationDetails, error)
 			IntValueDetails(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) (IntEvaluationDetails, error)
-			ObjectValueDetails(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (InterfaceEvaluationDetails, error)
+			ObjectValueDetails(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (ObjectEvaluationDetails, error)
 		}
 
 		var clientI any = client
@@ -632,7 +632,7 @@ func TestRequirement_4_4_2(t *testing.T) {
 	flagKey := "foo"
 	defaultValue := "bar"
 	evalCtx := EvaluationContext{}
-	flatCtx := flattenContext(evalCtx)
+	flatCtx := evalCtx.Flattened()
 
 	t.Run("before, after & finally hooks MUST be evaluated in the following order", func(t *testing.T) {
 		t.Cleanup(initSingleton)
@@ -644,10 +644,10 @@ func TestRequirement_4_4_2(t *testing.T) {
 		mockInvocationHook := NewMockHook(ctrl)
 		mockProviderHook := NewMockHook(ctrl)
 
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -693,10 +693,10 @@ func TestRequirement_4_4_2(t *testing.T) {
 		mockInvocationHook := NewMockHook(ctrl)
 		mockProviderHook := NewMockHook(ctrl)
 
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -706,7 +706,7 @@ func TestRequirement_4_4_2(t *testing.T) {
 
 		mockProvider.EXPECT().Hooks().Return([]Hook{mockProviderHook}).Times(2)
 
-		mockAPIHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("forced"))
+		mockAPIHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, errors.New("forced"))
 
 		// error: Provider, Invocation, Client, API
 		mockAPIHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -751,7 +751,7 @@ func TestRequirement_4_4_6(t *testing.T) {
 	flagKey := "foo"
 	defaultValue := "bar"
 	evalCtx := EvaluationContext{}
-	flatCtx := flattenContext(evalCtx)
+	flatCtx := evalCtx.Flattened()
 
 	t.Run(
 		"if an error occurs during the evaluation of before hooks, any remaining before hooks MUST NOT be invoked",
@@ -761,10 +761,10 @@ func TestRequirement_4_4_6(t *testing.T) {
 			mockHook1 := NewMockHook(ctrl)
 			mockHook2 := NewMockHook(ctrl)
 
-			mockProvider := NewMockFeatureProvider(ctrl)
+			mockProvider := NewMockProvider(ctrl)
 			mockProvider.EXPECT().Metadata().AnyTimes()
 
-			err := SetNamedProviderAndWait(t.Name(), mockProvider)
+			err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 			if err != nil {
 				t.Errorf("error setting up provider %v", err)
 			}
@@ -773,7 +773,7 @@ func TestRequirement_4_4_6(t *testing.T) {
 
 			mockProvider.EXPECT().Hooks().AnyTimes()
 
-			mockHook1.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("forced"))
+			mockHook1.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, errors.New("forced"))
 			// the lack of mockHook2.EXPECT().Before() asserts that remaining hooks aren't invoked after an error
 			mockHook1.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 			mockHook1.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
@@ -794,10 +794,10 @@ func TestRequirement_4_4_6(t *testing.T) {
 
 			mockHook1 := NewMockHook(ctrl)
 			mockHook2 := NewMockHook(ctrl)
-			mockProvider := NewMockFeatureProvider(ctrl)
+			mockProvider := NewMockProvider(ctrl)
 			mockProvider.EXPECT().Metadata().AnyTimes()
 
-			err := SetNamedProviderAndWait(t.Name(), mockProvider)
+			err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 			if err != nil {
 				t.Errorf("error setting up provider %v", err)
 			}
@@ -835,17 +835,17 @@ func TestRequirement_4_4_7(t *testing.T) {
 	evalCtx := EvaluationContext{}
 
 	mockHook := NewMockHook(ctrl)
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 	mockProvider.EXPECT().Metadata().AnyTimes()
 
-	err := SetNamedProviderAndWait(t.Name(), mockProvider)
+	err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
 
 	mockProvider.EXPECT().Hooks().AnyTimes()
 
-	mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("forced"))
+	mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, errors.New("forced"))
 	mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	mockHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
@@ -876,15 +876,15 @@ func TestRequirement_4_5_2(t *testing.T) {
 	flagKey := "foo"
 	defaultValue := "bar"
 	evalCtx := EvaluationContext{}
-	flatCtx := flattenContext(evalCtx)
+	flatCtx := evalCtx.Flattened()
 
 	t.Run("hook hints must be passed to before, after & finally hooks", func(t *testing.T) {
 		t.Cleanup(initSingleton)
 		mockHook := NewMockHook(ctrl)
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -911,10 +911,10 @@ func TestRequirement_4_5_2(t *testing.T) {
 		t.Cleanup(initSingleton)
 		mockHook := NewMockHook(ctrl)
 
-		mockProvider := NewMockFeatureProvider(ctrl)
+		mockProvider := NewMockProvider(ctrl)
 		mockProvider.EXPECT().Metadata().AnyTimes()
 
-		err := SetNamedProviderAndWait(t.Name(), mockProvider)
+		err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -928,7 +928,7 @@ func TestRequirement_4_5_2(t *testing.T) {
 
 		hookHints := NewHookHints(map[string]any{"foo": "bar"})
 
-		mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("forced"))
+		mockHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, errors.New("forced"))
 		mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), hookHints)
 		mockHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 

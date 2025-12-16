@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	of "github.com/open-feature/go-sdk/openfeature"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	of "go.openfeature.dev/openfeature"
 	"go.uber.org/mock/gomock"
 )
 
@@ -21,16 +21,17 @@ func Test_HookIsolator_BeforeCapturesData(t *testing.T) {
 	)
 	hookHints := of.NewHookHints(map[string]any{"foo": "bar"})
 	ctrl := gomock.NewController(t)
-	provider := of.NewMockFeatureProvider(ctrl)
+	provider := of.NewMockProvider(ctrl)
 	provider.EXPECT().Hooks().Return([]of.Hook{}).MinTimes(1)
-	isolator := isolateProvider(&namedProvider{
+	isolator := isolateProvider(&registeredProvider{
 		FeatureProvider: provider,
 		name:            "test-provider",
 	}, []of.Hook{})
 	assert.Zero(t, isolator.capturedContext)
 	assert.Zero(t, isolator.capturedHints)
-	evalCtx, err := isolator.Before(t.Context(), hookCtx, hookHints)
+	ctx, evalCtx, err := isolator.Before(t.Context(), hookCtx, hookHints)
 	require.NoError(t, err)
+	assert.NotNil(t, ctx)
 	assert.NotNil(t, evalCtx)
 	assert.Equal(t, hookCtx, isolator.capturedContext)
 	assert.Equal(t, hookHints, isolator.capturedHints)
@@ -39,9 +40,9 @@ func Test_HookIsolator_BeforeCapturesData(t *testing.T) {
 
 func Test_HookIsolator_Hooks_ReturnsSelf(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	provider := of.NewMockFeatureProvider(ctrl)
+	provider := of.NewMockProvider(ctrl)
 	provider.EXPECT().Hooks().Return([]of.Hook{}).MinTimes(1)
-	isolator := isolateProvider(&namedProvider{
+	isolator := isolateProvider(&registeredProvider{
 		FeatureProvider: provider,
 		name:            "test-provider",
 	}, []of.Hook{})
@@ -53,19 +54,19 @@ func Test_HookIsolator_Hooks_ReturnsSelf(t *testing.T) {
 func Test_HookIsolator_ExecutesHooksDuringEvaluation_NoError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testHook := of.NewMockHook(ctrl)
-	testHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+	testHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, nil)
 	testHook.EXPECT().After(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	testHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	testHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
-	provider := of.NewMockFeatureProvider(ctrl)
+	provider := of.NewMockProvider(ctrl)
 	provider.EXPECT().Hooks().Return([]of.Hook{testHook})
 	provider.EXPECT().BooleanEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(of.BoolResolutionDetail{
 		Value:                    true,
 		ProviderResolutionDetail: of.ProviderResolutionDetail{},
 	})
 
-	isolator := isolateProvider(&namedProvider{
+	isolator := isolateProvider(&registeredProvider{
 		FeatureProvider: provider,
 		name:            "test-provider",
 	}, nil)
@@ -76,15 +77,15 @@ func Test_HookIsolator_ExecutesHooksDuringEvaluation_NoError(t *testing.T) {
 func Test_HookIsolator_ExecutesHooksDuringEvaluation_BeforeErrorAbortsExecution(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testHook := of.NewMockHook(ctrl)
-	testHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("test error"))
+	testHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, errors.New("test error"))
 	testHook.EXPECT().After(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 	testHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	testHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
-	provider := of.NewMockFeatureProvider(ctrl)
+	provider := of.NewMockProvider(ctrl)
 	provider.EXPECT().Hooks().Return([]of.Hook{testHook})
 
-	isolator := isolateProvider(&namedProvider{
+	isolator := isolateProvider(&registeredProvider{
 		FeatureProvider: provider,
 		name:            "test-provider",
 	}, nil)
@@ -95,19 +96,19 @@ func Test_HookIsolator_ExecutesHooksDuringEvaluation_BeforeErrorAbortsExecution(
 func Test_HookIsolator_ExecutesHooksDuringEvaluation_WithAfterError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testHook := of.NewMockHook(ctrl)
-	testHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+	testHook.EXPECT().Before(gomock.Any(), gomock.Any(), gomock.Any()).Return(t.Context(), nil, nil)
 	testHook.EXPECT().After(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("test error"))
 	testHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	testHook.EXPECT().Error(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
-	provider := of.NewMockFeatureProvider(ctrl)
+	provider := of.NewMockProvider(ctrl)
 	provider.EXPECT().Hooks().Return([]of.Hook{testHook})
 	provider.EXPECT().BooleanEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(of.BoolResolutionDetail{
 		Value:                    false,
 		ProviderResolutionDetail: of.ProviderResolutionDetail{},
 	})
 
-	isolator := isolateProvider(&namedProvider{
+	isolator := isolateProvider(&registeredProvider{
 		FeatureProvider: provider,
 		name:            "test-provider",
 	}, nil)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	of "github.com/open-feature/go-sdk/openfeature"
+	of "go.openfeature.dev/openfeature"
 )
 
 type (
@@ -29,14 +29,14 @@ type (
 
 // Compile-time interface compliance checks
 var (
-	_ NamedProvider      = (*hookIsolator)(nil)
+	_ namedProvider      = (*hookIsolator)(nil)
 	_ of.FeatureProvider = (*hookIsolator)(nil)
 	_ of.Hook            = (*hookIsolator)(nil)
 	_ of.EventHandler    = (*eventHandlingHookIsolator)(nil)
 )
 
 // isolateProvider wraps a [of.FeatureProvider] to execute its hooks along with any additional ones.
-func isolateProvider(provider NamedProvider, extraHooks []of.Hook) *hookIsolator {
+func isolateProvider(provider namedProvider, extraHooks []of.Hook) *hookIsolator {
 	return &hookIsolator{
 		FeatureProvider: provider,
 		hooks:           append(provider.Hooks(), extraHooks...),
@@ -46,7 +46,7 @@ func isolateProvider(provider NamedProvider, extraHooks []of.Hook) *hookIsolator
 
 // isolateProviderWithEvents wraps a [of.FeatureProvider] to execute its hooks along with any additional ones. This is
 // identical to [isolateProvider], but also this will also implement [of.EventHandler].
-func isolateProviderWithEvents(provider NamedProvider, extraHooks []of.Hook) *eventHandlingHookIsolator {
+func isolateProviderWithEvents(provider namedProvider, extraHooks []of.Hook) *eventHandlingHookIsolator {
 	return &eventHandlingHookIsolator{*isolateProvider(provider, extraHooks)}
 }
 
@@ -62,7 +62,7 @@ func (h *hookIsolator) unwrap() of.FeatureProvider {
 	return h.FeatureProvider
 }
 
-func (h *hookIsolator) Before(_ context.Context, hookContext of.HookContext, hookHints of.HookHints) (*of.EvaluationContext, error) {
+func (h *hookIsolator) Before(ctx context.Context, hookContext of.HookContext, hookHints of.HookHints) (context.Context, *of.EvaluationContext, error) {
 	// Used for capturing the context and hints
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -70,7 +70,7 @@ func (h *hookIsolator) Before(_ context.Context, hookContext of.HookContext, hoo
 	h.capturedHints = hookHints
 	// Return copy of original evaluation context so any changes are isolated to each provider's hooks
 	evalCtx := h.capturedContext.EvaluationContext()
-	return &evalCtx, nil
+	return ctx, &evalCtx, nil
 }
 
 func (h *hookIsolator) Metadata() of.Metadata {
@@ -113,17 +113,17 @@ func (h *hookIsolator) IntEvaluation(ctx context.Context, flag string, defaultVa
 	}
 }
 
-func (h *hookIsolator) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx of.FlattenedContext) of.InterfaceResolutionDetail {
+func (h *hookIsolator) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx of.FlattenedContext) of.ObjectResolutionDetail {
 	completeEval := h.evaluate(ctx, flag, of.Object, defaultValue, flatCtx)
 
-	return of.InterfaceResolutionDetail{
+	return of.ObjectResolutionDetail{
 		Value:                    completeEval.Value,
 		ProviderResolutionDetail: toProviderResolutionDetail(completeEval),
 	}
 }
 
-// toProviderResolutionDetail Converts a [of.InterfaceEvaluationDetails] to a [of.ProviderResolutionDetail].
-func toProviderResolutionDetail(evalDetails of.InterfaceEvaluationDetails) of.ProviderResolutionDetail {
+// toProviderResolutionDetail Converts a [of.GenericEvaluationDetails] to a [of.ProviderResolutionDetail].
+func toProviderResolutionDetail(evalDetails of.EvaluationDetails[of.FlagTypes]) of.ProviderResolutionDetail {
 	var resolutionErr of.ResolutionError
 	var reason of.Reason
 	switch evalDetails.ErrorCode {
@@ -160,20 +160,18 @@ func (h *hookIsolator) Hooks() []of.Hook {
 }
 
 // evaluate Executes evaluation of the flag wrapped by executing hooks.
-func (h *hookIsolator) evaluate(ctx context.Context, flag string, flagType of.Type, defaultValue any, flatCtx of.FlattenedContext) of.InterfaceEvaluationDetails {
-	evalDetails := of.InterfaceEvaluationDetails{
-		Value: defaultValue,
-		EvaluationDetails: of.EvaluationDetails{
-			FlagKey:  flag,
-			FlagType: flagType,
-		},
+func (h *hookIsolator) evaluate(ctx context.Context, flag string, flagType of.Type, defaultValue any, flatCtx of.FlattenedContext) of.EvaluationDetails[of.FlagTypes] {
+	evalDetails := of.EvaluationDetails[of.FlagTypes]{
+		Value:    defaultValue,
+		FlagKey:  flag,
+		FlagType: flagType,
 	}
 
 	defer func() {
 		h.finallyHooks(ctx, evalDetails)
 	}()
 
-	evalCtx, err := h.beforeHooks(ctx)
+	ctx, evalCtx, err := h.beforeHooks(ctx)
 	// Update hook context unconditionally
 	h.updateEvalContext(evalCtx)
 	if err != nil {
@@ -190,9 +188,9 @@ func (h *hookIsolator) evaluate(ctx context.Context, flag string, flagType of.Ty
 
 	// Merge together the passed in flat context and the captured evaluation context and transform back into a flattened
 	// context for evaluation
-	flatCtx = flattenContext(mergeContexts(h.capturedContext.EvaluationContext(), deepenContext(flatCtx)))
+	flatCtx = (mergeContexts(h.capturedContext.EvaluationContext(), deepenContext(flatCtx))).Flattened()
 
-	var resolution of.InterfaceResolutionDetail
+	var resolution of.ObjectResolutionDetail
 	switch flagType {
 	case of.Object:
 		resolution = h.FeatureProvider.ObjectEvaluation(ctx, flag, defaultValue, flatCtx)
@@ -240,23 +238,26 @@ func (h *hookIsolator) evaluate(ctx context.Context, flag string, flagType of.Ty
 
 // beforeHooks Executes all before hooks together, merging the changes to the [of.EvaluationContext] as it goes. The
 // return of this function is a merged version of the evaluation context
-func (h *hookIsolator) beforeHooks(ctx context.Context) (of.EvaluationContext, error) {
+func (h *hookIsolator) beforeHooks(ctx context.Context) (context.Context, of.EvaluationContext, error) {
 	contexts := []of.EvaluationContext{h.capturedContext.EvaluationContext()}
 	for _, hook := range h.hooks {
-		resultEvalCtx, err := hook.Before(ctx, h.capturedContext, h.capturedHints)
+		tctx, resultEvalCtx, err := hook.Before(ctx, h.capturedContext, h.capturedHints)
 		if resultEvalCtx != nil {
 			contexts = append(contexts, *resultEvalCtx)
 		}
+		if tctx != nil {
+			ctx = tctx
+		}
 		if err != nil {
-			return mergeContexts(contexts...), err
+			return ctx, mergeContexts(contexts...), err
 		}
 	}
 
-	return mergeContexts(contexts...), nil
+	return ctx, mergeContexts(contexts...), nil
 }
 
 // afterHooks executes all after [of.Hook] instances together.
-func (h *hookIsolator) afterHooks(ctx context.Context, evalDetails of.InterfaceEvaluationDetails) error {
+func (h *hookIsolator) afterHooks(ctx context.Context, evalDetails of.EvaluationDetails[of.FlagTypes]) error {
 	for _, hook := range h.hooks {
 		if err := hook.After(ctx, h.capturedContext, evalDetails, h.capturedHints); err != nil {
 			return err
@@ -274,7 +275,7 @@ func (h *hookIsolator) errorHooks(ctx context.Context, err error) {
 }
 
 // finallyHooks execute all finally [of.Hook] instances together.
-func (h *hookIsolator) finallyHooks(ctx context.Context, details of.InterfaceEvaluationDetails) {
+func (h *hookIsolator) finallyHooks(ctx context.Context, details of.EvaluationDetails[of.FlagTypes]) {
 	for _, hook := range h.hooks {
 		hook.Finally(ctx, h.capturedContext, details, h.capturedHints)
 	}
@@ -309,13 +310,6 @@ func deepenContext(flatCtx of.FlattenedContext) of.EvaluationContext {
 		targetingKey, _ = tk.(string)
 	}
 	return of.NewEvaluationContext(targetingKey, noTargetingKey)
-}
-
-// flattenContext converts a [of.EvaluationContext] to a [of.FlattenedContext]
-func flattenContext(evalCtx of.EvaluationContext) of.FlattenedContext {
-	flatCtx := evalCtx.Attributes()
-	flatCtx[of.TargetingKey] = evalCtx.TargetingKey()
-	return flatCtx
 }
 
 // mergeContexts merges attributes from the given EvaluationContexts with the nth [of.EvaluationContext] taking precedence

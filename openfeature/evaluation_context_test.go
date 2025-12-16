@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/open-feature/go-sdk/openfeature/internal"
 	"go.uber.org/mock/gomock"
 )
 
@@ -63,16 +62,16 @@ func TestRequirement_3_2_1(t *testing.T) {
 		client := NewClient("test")
 
 		type requirement interface {
-			BooleanValue(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) (bool, error)
-			StringValue(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) (string, error)
-			FloatValue(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) (float64, error)
-			IntValue(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) (int64, error)
-			ObjectValue(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (any, error)
+			Boolean(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) bool
+			String(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) string
+			Float(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) float64
+			Int(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) int64
+			Object(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) any
 			BooleanValueDetails(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) (BooleanEvaluationDetails, error)
 			StringValueDetails(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) (StringEvaluationDetails, error)
 			FloatValueDetails(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) (FloatEvaluationDetails, error)
 			IntValueDetails(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) (IntEvaluationDetails, error)
-			ObjectValueDetails(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (InterfaceEvaluationDetails, error)
+			ObjectValueDetails(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (ObjectEvaluationDetails, error)
 		}
 
 		var clientI any = client
@@ -108,10 +107,10 @@ func TestRequirement_3_2_2(t *testing.T) {
 	}
 	transactionCtx := WithTransactionContext(t.Context(), transactionEvalCtx)
 
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 	mockProvider.EXPECT().Metadata().AnyTimes()
 
-	err := SetNamedProviderAndWait(t.Name(), mockProvider)
+	err := SetNamedProviderAndWait(t.Context(), t.Name(), mockProvider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -147,13 +146,10 @@ func TestRequirement_3_2_2(t *testing.T) {
 			"user":               1,
 		},
 	}
-	flatCtx := flattenContext(expectedMergedEvalCtx)
+	flatCtx := expectedMergedEvalCtx.Flattened()
 	mockProvider.EXPECT().StringEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), flatCtx)
 
-	_, err = client.StringValue(transactionCtx, "foo", "bar", invocationEvalCtx)
-	if err != nil {
-		t.Error(err)
-	}
+	_ = client.String(transactionCtx, "foo", "bar", invocationEvalCtx)
 }
 
 func TestEvaluationContext_AttributesNotPassedByReference(t *testing.T) {
@@ -173,7 +169,7 @@ func TestRequirement_3_3_1(t *testing.T) {
 	t.Run("The API MUST have a method for setting the evaluation context of the transaction context propagator for the current transaction.", func(t *testing.T) {
 		ctx := t.Context()
 		ctx = WithTransactionContext(ctx, EvaluationContext{})
-		val, ok := ctx.Value(internal.TransactionContext).(EvaluationContext)
+		val, ok := ctx.Value(transactionContext).(EvaluationContext)
 
 		if !ok {
 			t.Fatalf("failed to find transcation context set from WithTransactionContext: %v", val)

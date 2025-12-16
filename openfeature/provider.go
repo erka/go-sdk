@@ -53,7 +53,7 @@ type FeatureProvider interface {
 	StringEvaluation(ctx context.Context, flag string, defaultValue string, flatCtx FlattenedContext) StringResolutionDetail
 	FloatEvaluation(ctx context.Context, flag string, defaultValue float64, flatCtx FlattenedContext) FloatResolutionDetail
 	IntEvaluation(ctx context.Context, flag string, defaultValue int64, flatCtx FlattenedContext) IntResolutionDetail
-	ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) InterfaceResolutionDetail
+	ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) ObjectResolutionDetail
 	Hooks() []Hook
 }
 
@@ -63,28 +63,8 @@ type State string
 // StateHandler is the contract for initialization & shutdown.
 // FeatureProvider can opt in for this behavior by implementing the interface
 type StateHandler interface {
-	Init(evaluationContext EvaluationContext) error
-	Shutdown()
-}
-
-// ContextAwareStateHandler extends StateHandler with context-aware initialization and shutdown
-// for providers that need to respect request timeouts and cancellation.
-// If a provider implements this interface, InitWithContext and ShutdownWithContext will be called instead of Init and Shutdown.
-//
-// Use this interface when your provider needs to:
-// - Respect initialization/shutdown timeouts (e.g., network calls, database connections)
-// - Support graceful cancellation during setup and teardown
-// - Integrate with request-scoped contexts
-//
-// Best practices:
-// - Always check ctx.Done() in long-running initialization and shutdown operations
-// - Use reasonable timeout values (typically 5-30 seconds)
-// - Return ctx.Err() when the context is cancelled
-// - Maintain backward compatibility by implementing both interfaces
-type ContextAwareStateHandler interface {
-	StateHandler // Embed existing interface for backward compatibility
-	InitWithContext(ctx context.Context, evaluationContext EvaluationContext) error
-	ShutdownWithContext(ctx context.Context) error
+	Init(ctx context.Context, evaluationContext EvaluationContext) error
+	Shutdown(ctx context.Context) error
 }
 
 // Tracker is the contract for tracking
@@ -93,16 +73,19 @@ type Tracker interface {
 	Track(ctx context.Context, trackingEventName string, evaluationContext EvaluationContext, details TrackingEventDetails)
 }
 
+var _ StateHandler = (*NoopStateHandler)(nil)
+
 // NoopStateHandler is a noop StateHandler implementation
 type NoopStateHandler struct{}
 
-func (s *NoopStateHandler) Init(e EvaluationContext) error {
+func (s *NoopStateHandler) Init(context.Context, EvaluationContext) error {
 	// NOOP
 	return nil
 }
 
-func (s *NoopStateHandler) Shutdown() {
+func (s *NoopStateHandler) Shutdown(context.Context) error {
 	// NOOP
+	return nil
 }
 
 // Eventing
@@ -135,7 +118,7 @@ type EventDetails struct {
 	ProviderEventDetails
 }
 
-type EventCallback *func(details EventDetails)
+type EventCallback func(details EventDetails)
 
 // NoopEventHandler is the out-of-the-box EventHandler which is noop
 type NoopEventHandler struct{}
@@ -175,8 +158,13 @@ func (p ProviderResolutionDetail) Error() error {
 	return errors.New(p.ResolutionError.Error())
 }
 
+// FlagTypes defines the types that can be used for flag values.
+type FlagTypes interface {
+	int64 | float64 | string | bool | any
+}
+
 // GenericResolutionDetail represents the result of the provider's flag resolution process.
-type GenericResolutionDetail[T any] struct {
+type GenericResolutionDetail[T FlagTypes] struct {
 	Value T
 	ProviderResolutionDetail
 }
@@ -190,8 +178,8 @@ type (
 	FloatResolutionDetail = GenericResolutionDetail[float64]
 	// IntResolutionDetail represents the result of the provider's flag resolution process for int64 flags.
 	IntResolutionDetail = GenericResolutionDetail[int64]
-	// InterfaceResolutionDetail represents the result of the provider's flag resolution process for Object flags.
-	InterfaceResolutionDetail = GenericResolutionDetail[any]
+	// ObjectResolutionDetail represents the result of the provider's flag resolution process for Object flags.
+	ObjectResolutionDetail = GenericResolutionDetail[any]
 )
 
 // Metadata provides provider name

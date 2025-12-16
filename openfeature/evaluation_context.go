@@ -3,8 +3,6 @@ package openfeature
 import (
 	"context"
 	"maps"
-
-	"github.com/open-feature/go-sdk/openfeature/internal"
 )
 
 // EvaluationContext provides ambient information for the purposes of flag evaluation
@@ -35,6 +33,18 @@ func (e EvaluationContext) Attributes() map[string]any {
 	return attrs
 }
 
+// Flattened converts EvaluationContext to a [FlattenedContext].
+func (e EvaluationContext) Flattened() FlattenedContext {
+	flatCtx := FlattenedContext{}
+	if e.attributes != nil {
+		flatCtx = e.Attributes()
+	}
+	if e.targetingKey != "" {
+		flatCtx[TargetingKey] = e.targetingKey
+	}
+	return flatCtx
+}
+
 // NewEvaluationContext constructs an EvaluationContext
 //
 // targetingKey - uniquely identifying the subject (end-user, or client service) of a flag evaluation
@@ -62,7 +72,7 @@ func NewTargetlessEvaluationContext(attributes map[string]any) EvaluationContext
 // ctx - the context to embed the EvaluationContext in
 // ec - the EvaluationContext to embed into the context
 func WithTransactionContext(ctx context.Context, ec EvaluationContext) context.Context {
-	return context.WithValue(ctx, internal.TransactionContext, ec)
+	return context.WithValue(ctx, transactionContext, ec)
 }
 
 // MergeTransactionContext merges the provided EvaluationContext with the current TransactionContext (if it exists)
@@ -81,7 +91,7 @@ func MergeTransactionContext(ctx context.Context, ec EvaluationContext) context.
 //
 // ctx - the context to pull EvaluationContext from
 func TransactionContext(ctx context.Context) EvaluationContext {
-	ec, ok := ctx.Value(internal.TransactionContext).(EvaluationContext)
+	ec, ok := ctx.Value(transactionContext).(EvaluationContext)
 
 	if !ok {
 		return EvaluationContext{}
@@ -89,3 +99,12 @@ func TransactionContext(ctx context.Context) EvaluationContext {
 
 	return ec
 }
+
+// contextKey is just an empty struct. It exists so transactionContext can be
+// an immutable variable with a unique type. It's immutable
+// because nobody else can create a contextKey, being unexported.
+type contextKey struct{}
+
+// transactionContext is the context key to use with golang.org/x/net/context's
+// WithValue function to associate an EvaluationContext value with a context.
+var transactionContext contextKey

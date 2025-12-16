@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/open-feature/go-sdk/openfeature"
+	"go.openfeature.dev/openfeature"
 )
 
 const (
@@ -18,7 +18,7 @@ type InMemoryProvider struct {
 	trackingEvents map[string][]InMemoryEvent
 }
 
-func NewInMemoryProvider(from map[string]InMemoryFlag) InMemoryProvider {
+func NewProvider(from map[string]InMemoryFlag) InMemoryProvider {
 	return InMemoryProvider{
 		flags:          from,
 		trackingEvents: map[string][]InMemoryEvent{},
@@ -41,7 +41,7 @@ func (i InMemoryProvider) BooleanEvaluation(ctx context.Context, flag string, de
 	}
 
 	resolveFlag, detail := memoryFlag.Resolve(defaultValue, flatCtx)
-	result := genericResolve[bool](resolveFlag, defaultValue, &detail)
+	result := genericResolve(resolveFlag, defaultValue, &detail)
 
 	return openfeature.BoolResolutionDetail{
 		Value:                    result,
@@ -59,7 +59,7 @@ func (i InMemoryProvider) StringEvaluation(ctx context.Context, flag string, def
 	}
 
 	resolveFlag, detail := memoryFlag.Resolve(defaultValue, flatCtx)
-	result := genericResolve[string](resolveFlag, defaultValue, &detail)
+	result := genericResolve(resolveFlag, defaultValue, &detail)
 
 	return openfeature.StringResolutionDetail{
 		Value:                    result,
@@ -77,7 +77,7 @@ func (i InMemoryProvider) FloatEvaluation(ctx context.Context, flag string, defa
 	}
 
 	resolveFlag, detail := memoryFlag.Resolve(defaultValue, flatCtx)
-	result := genericResolve[float64](resolveFlag, defaultValue, &detail)
+	result := genericResolve(resolveFlag, defaultValue, &detail)
 
 	return openfeature.FloatResolutionDetail{
 		Value:                    result,
@@ -95,7 +95,7 @@ func (i InMemoryProvider) IntEvaluation(ctx context.Context, flag string, defaul
 	}
 
 	resolveFlag, detail := memoryFlag.Resolve(defaultValue, flatCtx)
-	result := genericResolve[int](resolveFlag, int(defaultValue), &detail)
+	result := genericResolve(resolveFlag, int(defaultValue), &detail)
 
 	return openfeature.IntResolutionDetail{
 		Value:                    int64(result),
@@ -103,10 +103,10 @@ func (i InMemoryProvider) IntEvaluation(ctx context.Context, flag string, defaul
 	}
 }
 
-func (i InMemoryProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx openfeature.FlattenedContext) openfeature.InterfaceResolutionDetail {
+func (i InMemoryProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx openfeature.FlattenedContext) openfeature.ObjectResolutionDetail {
 	memoryFlag, details, ok := i.find(flag)
 	if !ok {
-		return openfeature.InterfaceResolutionDetail{
+		return openfeature.ObjectResolutionDetail{
 			Value:                    defaultValue,
 			ProviderResolutionDetail: *details,
 		}
@@ -123,7 +123,7 @@ func (i InMemoryProvider) ObjectEvaluation(ctx context.Context, flag string, def
 		detail.ResolutionError = openfeature.NewTypeMismatchResolutionError("incorrect type association")
 	}
 
-	return openfeature.InterfaceResolutionDetail{
+	return openfeature.ObjectResolutionDetail{
 		Value:                    result,
 		ProviderResolutionDetail: detail,
 	}

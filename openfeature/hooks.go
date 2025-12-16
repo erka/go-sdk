@@ -6,10 +6,10 @@ import "context"
 // They operate similarly to middleware in many web frameworks.
 // https://github.com/open-feature/spec/blob/main/specification/hooks.md
 type Hook interface {
-	Before(ctx context.Context, hookContext HookContext, hookHints HookHints) (*EvaluationContext, error)
-	After(ctx context.Context, hookContext HookContext, flagEvaluationDetails InterfaceEvaluationDetails, hookHints HookHints) error
+	Before(ctx context.Context, hookContext HookContext, hookHints HookHints) (context.Context, *EvaluationContext, error)
+	After(ctx context.Context, hookContext HookContext, flagEvaluationDetails EvaluationDetails[FlagTypes], hookHints HookHints) error
 	Error(ctx context.Context, hookContext HookContext, err error, hookHints HookHints)
-	Finally(ctx context.Context, hookContext HookContext, flagEvaluationDetails InterfaceEvaluationDetails, hookHints HookHints)
+	Finally(ctx context.Context, hookContext HookContext, flagEvaluationDetails EvaluationDetails[FlagTypes], hookHints HookHints)
 }
 
 // HookHints contains a map of hints for hooks
@@ -24,7 +24,7 @@ func NewHookHints(mapOfHints map[string]any) HookHints {
 
 // Value returns the value at the given key in the underlying map.
 // Maintains immutability of the map.
-func (h HookHints) Value(key string) any {
+func (h HookHints) Value(key string) FlagTypes {
 	return h.mapOfHints[key]
 }
 
@@ -32,7 +32,7 @@ func (h HookHints) Value(key string) any {
 type HookContext struct {
 	flagKey           string
 	flagType          Type
-	defaultValue      any
+	defaultValue      FlagTypes
 	clientMetadata    ClientMetadata
 	providerMetadata  Metadata
 	evaluationContext EvaluationContext
@@ -49,7 +49,7 @@ func (h HookContext) FlagType() Type {
 }
 
 // DefaultValue returns the hook context's default value
-func (h HookContext) DefaultValue() any {
+func (h HookContext) DefaultValue() FlagTypes {
 	return h.defaultValue
 }
 
@@ -73,7 +73,7 @@ func (h HookContext) EvaluationContext() EvaluationContext {
 func NewHookContext(
 	flagKey string,
 	flagType Type,
-	defaultValue any,
+	defaultValue FlagTypes,
 	clientMetadata ClientMetadata,
 	providerMetadata Metadata,
 	evaluationContext EvaluationContext,
@@ -100,15 +100,15 @@ var _ Hook = UnimplementedHook{}
 //	}
 type UnimplementedHook struct{}
 
-func (UnimplementedHook) Before(context.Context, HookContext, HookHints) (*EvaluationContext, error) {
-	return nil, nil
+func (UnimplementedHook) Before(ctx context.Context, _ HookContext, _ HookHints) (context.Context, *EvaluationContext, error) {
+	return ctx, nil, nil
 }
 
-func (UnimplementedHook) After(context.Context, HookContext, InterfaceEvaluationDetails, HookHints) error {
+func (UnimplementedHook) After(context.Context, HookContext, EvaluationDetails[FlagTypes], HookHints) error {
 	return nil
 }
 
 func (UnimplementedHook) Error(context.Context, HookContext, error, HookHints) {}
 
-func (UnimplementedHook) Finally(context.Context, HookContext, InterfaceEvaluationDetails, HookHints) {
+func (UnimplementedHook) Finally(context.Context, HookContext, EvaluationDetails[FlagTypes], HookHints) {
 }

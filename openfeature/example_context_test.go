@@ -6,18 +6,18 @@ import (
 	"log"
 	"time"
 
-	"github.com/open-feature/go-sdk/openfeature"
+	"go.openfeature.dev/openfeature"
 )
 
-// ExampleSetProviderWithContext demonstrates asynchronous provider setup with timeout control.
-func ExampleSetProviderWithContext() {
+// ExampleSetProvider demonstrates asynchronous provider setup with timeout control.
+func ExampleSetProvider() {
 	// Create a test provider for demonstration
 	provider := &openfeature.NoopProvider{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err := openfeature.SetProviderWithContext(ctx, provider)
+	err := openfeature.SetProvider(ctx, provider)
 	if err != nil {
 		log.Printf("Failed to start provider setup: %v", err)
 		return
@@ -28,15 +28,15 @@ func ExampleSetProviderWithContext() {
 	// Output: Provider setup initiated
 }
 
-// ExampleSetProviderWithContextAndWait demonstrates synchronous provider setup with error handling.
-func ExampleSetProviderWithContextAndWait() {
+// ExampleSetProviderAndWait demonstrates synchronous provider setup with error handling.
+func ExampleSetProviderAndWait() {
 	// Create a test provider for demonstration
 	provider := &openfeature.NoopProvider{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	err := openfeature.SetProviderWithContextAndWait(ctx, provider)
+	err := openfeature.SetProviderAndWait(ctx, provider)
 	if err != nil {
 		log.Printf("Provider initialization failed: %v", err)
 		return
@@ -47,8 +47,8 @@ func ExampleSetProviderWithContextAndWait() {
 	// Output: Provider is ready
 }
 
-// ExampleSetNamedProviderWithContext demonstrates multi-tenant provider setup.
-func ExampleSetNamedProviderWithContext() {
+// ExampleSetNamedProvider demonstrates multi-tenant provider setup.
+func ExampleSetNamedProvider() {
 	// Create test providers for different services
 	userProvider := &openfeature.NoopProvider{}
 	billingProvider := &openfeature.NoopProvider{}
@@ -56,13 +56,13 @@ func ExampleSetNamedProviderWithContext() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	err := openfeature.SetNamedProviderWithContext(ctx, "user-service", userProvider)
+	err := openfeature.SetNamedProvider(ctx, "user-service", userProvider)
 	if err != nil {
 		log.Printf("Failed to setup user service provider: %v", err)
 		return
 	}
 
-	err = openfeature.SetNamedProviderWithContext(ctx, "billing-service", billingProvider)
+	err = openfeature.SetNamedProvider(ctx, "billing-service", billingProvider)
 	if err != nil {
 		log.Printf("Failed to setup billing service provider: %v", err)
 		return
@@ -78,8 +78,8 @@ func ExampleSetNamedProviderWithContext() {
 	// Billing client domain: billing-service
 }
 
-// ExampleSetNamedProviderWithContextAndWait demonstrates critical service provider setup.
-func ExampleSetNamedProviderWithContextAndWait() {
+// ExampleSetNamedProviderAndWait demonstrates critical service provider setup.
+func ExampleSetNamedProviderAndWait() {
 	// Create a test provider for demonstration
 	criticalProvider := &openfeature.NoopProvider{}
 
@@ -87,7 +87,7 @@ func ExampleSetNamedProviderWithContextAndWait() {
 	defer cancel()
 
 	// Wait for critical providers to be ready
-	err := openfeature.SetNamedProviderWithContextAndWait(ctx, "critical-service", criticalProvider)
+	err := openfeature.SetNamedProviderAndWait(ctx, "critical-service", criticalProvider)
 	if err != nil {
 		log.Printf("Critical provider failed to initialize: %v", err)
 		return
@@ -95,14 +95,14 @@ func ExampleSetNamedProviderWithContextAndWait() {
 
 	// Now safe to use the client
 	client := openfeature.NewClient("critical-service")
-	enabled, _ := client.BooleanValue(context.Background(), "feature-x", false, openfeature.EvaluationContext{})
+	enabled := client.Boolean(context.Background(), "feature-x", false, openfeature.EvaluationContext{})
 
 	fmt.Printf("Critical service ready, feature-x enabled: %v\n", enabled)
 	// Output: Critical service ready, feature-x enabled: false
 }
 
-// ExampleContextAwareStateHandler demonstrates how context-aware shutdown works automatically.
-func ExampleContextAwareStateHandler() {
+// ExampleStateHandler demonstrates how context-aware shutdown works automatically.
+func ExampleStateHandler() {
 	// Context-aware providers automatically use ShutdownWithContext when replaced
 	provider1 := &openfeature.NoopProvider{}
 	provider2 := &openfeature.NoopProvider{}
@@ -111,14 +111,14 @@ func ExampleContextAwareStateHandler() {
 	defer cancel()
 
 	// Set first provider
-	err := openfeature.SetProviderWithContextAndWait(ctx, provider1)
+	err := openfeature.SetProviderAndWait(ctx, provider1)
 	if err != nil {
 		log.Printf("Provider setup failed: %v", err)
 		return
 	}
 
 	// Replace with second provider - this triggers context-aware shutdown of provider1 if it supports it
-	err = openfeature.SetProviderWithContextAndWait(ctx, provider2)
+	err = openfeature.SetProviderAndWait(ctx, provider2)
 	if err != nil {
 		log.Printf("Provider replacement failed: %v", err)
 		return
@@ -128,8 +128,8 @@ func ExampleContextAwareStateHandler() {
 	// Output: Context-aware provider lifecycle completed
 }
 
-// ExampleShutdownWithContext demonstrates graceful application shutdown with timeout control.
-func ExampleShutdownWithContext() {
+// ExampleShutdown demonstrates graceful application shutdown with timeout control.
+func ExampleShutdown() {
 	// Set up providers
 	provider1 := &openfeature.NoopProvider{}
 	provider2 := &openfeature.NoopProvider{}
@@ -138,13 +138,13 @@ func ExampleShutdownWithContext() {
 	defer cancel()
 
 	// Set up multiple providers
-	err := openfeature.SetProviderWithContextAndWait(ctx, provider1)
+	err := openfeature.SetProviderAndWait(ctx, provider1)
 	if err != nil {
 		log.Printf("Provider setup failed: %v", err)
 		return
 	}
 
-	err = openfeature.SetNamedProviderWithContextAndWait(ctx, "service-a", provider2)
+	err = openfeature.SetNamedProviderAndWait(ctx, "service-a", provider2)
 	if err != nil {
 		log.Printf("Named provider setup failed: %v", err)
 		return
@@ -156,7 +156,7 @@ func ExampleShutdownWithContext() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	err = openfeature.ShutdownWithContext(shutdownCtx)
+	err = openfeature.Shutdown(shutdownCtx)
 	if err != nil {
 		log.Printf("Shutdown completed with errors: %v", err)
 	} else {

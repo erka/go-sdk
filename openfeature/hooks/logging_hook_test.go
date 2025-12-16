@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/open-feature/go-sdk/openfeature/memprovider"
+	"go.openfeature.dev/openfeature"
+	memprovider "go.openfeature.dev/openfeature/providers/inmemory"
 )
 
 func TestCreateLoggingHookWithDefaultLoggerAndContextInclusion(t *testing.T) {
@@ -70,7 +70,7 @@ func testLoggingHookLogsMessagesAsExpected(hook LoggingHook, logger *slog.Logger
 		t.Errorf("Expected logger to be %v, got %v", logger, hook.logger)
 	}
 
-	memoryProvider := memprovider.NewInMemoryProvider(map[string]memprovider.InMemoryFlag{
+	memoryProvider := memprovider.NewProvider(map[string]memprovider.InMemoryFlag{
 		"boolFlag": {
 			Key:            "boolFlag",
 			State:          memprovider.Enabled,
@@ -83,7 +83,7 @@ func testLoggingHookLogsMessagesAsExpected(hook LoggingHook, logger *slog.Logger
 		},
 	})
 
-	err := openfeature.SetNamedProviderAndWait("test-app", memoryProvider)
+	err := openfeature.SetNamedProviderAndWait(t.Context(), "test-app", memoryProvider)
 	if err != nil {
 		t.Error("error setting provider", err)
 	}
@@ -91,7 +91,7 @@ func testLoggingHookLogsMessagesAsExpected(hook LoggingHook, logger *slog.Logger
 	client := openfeature.NewClient("test-app")
 
 	t.Run("test boolean success", func(t *testing.T) {
-		res, err := client.BooleanValue(
+		res := client.Boolean(
 			t.Context(),
 			"boolFlag",
 			false,
@@ -102,9 +102,6 @@ func testLoggingHookLogsMessagesAsExpected(hook LoggingHook, logger *slog.Logger
 				},
 			),
 		)
-		if err != nil {
-			t.Error("expected nil error")
-		}
 		if res != true {
 			t.Errorf("incorrect evaluation, expected %t, got %t", true, res)
 		}
@@ -129,7 +126,7 @@ func testLoggingHookLogsMessagesAsExpected(hook LoggingHook, logger *slog.Logger
 	})
 
 	t.Run("test boolean error", func(t *testing.T) {
-		res, err := client.BooleanValue(
+		res := client.Boolean(
 			t.Context(),
 			"non-existing",
 			false,
@@ -140,9 +137,6 @@ func testLoggingHookLogsMessagesAsExpected(hook LoggingHook, logger *slog.Logger
 				},
 			),
 		)
-		if err == nil {
-			t.Error("expected error")
-		}
 		if res != false {
 			t.Errorf("incorrect evaluation, expected %t, got %t", false, res)
 		}

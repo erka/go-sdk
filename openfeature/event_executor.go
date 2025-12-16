@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	reflect "reflect"
 	"slices"
 	"sync"
 	"time"
@@ -90,10 +91,30 @@ func (e *eventExecutor) RemoveHandler(t EventType, c EventCallback) {
 		// nothing to remove
 		return
 	}
+	// Get the unique pointer/address of the function we want to remove (c)
+	targetPtr := reflect.ValueOf(c).Pointer()
 
 	e.apiRegistry[t] = slices.DeleteFunc(entrySlice, func(f EventCallback) bool {
-		return f == c
+		// Compare the unique pointer/address of the slice element (f)
+		// against the target pointer.
+		return reflect.ValueOf(f).Pointer() == targetPtr
 	})
+}
+
+// isHandlerRegistered checks if a handler is already registered for event type.
+func (e *eventExecutor) isHandlerRegistered(t EventType, c EventCallback) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// Get the unique pointer/address of the function to check (c)
+	targetPtr := reflect.ValueOf(c).Pointer()
+
+	for _, f := range e.apiRegistry[t] {
+		if reflect.ValueOf(f).Pointer() == targetPtr {
+			return true
+		}
+	}
+	return false
 }
 
 // AddClientHandler registers a client level handler
@@ -123,21 +144,45 @@ func (e *eventExecutor) AddClientHandler(domain string, t EventType, c EventCall
 	e.emitOnRegistration(domain, reference, t, c)
 }
 
+// isDomainHandlerRegistered checks if a handler is already registered for event type for this domain.
+func (e *eventExecutor) isDomainHandlerRegistered(domain string, t EventType, c EventCallback) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	registry, ok := e.scopedRegistry[domain]
+	if !ok {
+		// nothing to remove
+		return false
+	}
+	// Get the unique pointer/address of the function to check (c)
+	targetPtr := reflect.ValueOf(c).Pointer()
+
+	for _, f := range registry.callbacks[t] {
+		if reflect.ValueOf(f).Pointer() == targetPtr {
+			return true
+		}
+	}
+	return false
+}
+
 // RemoveClientHandler removes a client level handler
 func (e *eventExecutor) RemoveClientHandler(domain string, t EventType, c EventCallback) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	_, ok := e.scopedRegistry[domain]
+	registry, ok := e.scopedRegistry[domain]
 	if !ok {
 		// nothing to remove
 		return
 	}
 
-	entrySlice := e.scopedRegistry[domain].callbacks[t]
+	entrySlice := registry.callbacks[t]
+	targetPtr := reflect.ValueOf(c).Pointer()
 
 	e.scopedRegistry[domain].callbacks[t] = slices.DeleteFunc(entrySlice, func(f EventCallback) bool {
-		return f == c
+		// Compare the unique pointer/address of the slice element (f)
+		// against the target pointer.
+		return reflect.ValueOf(f).Pointer() == targetPtr
 	})
 }
 
@@ -167,7 +212,7 @@ func (e *eventExecutor) emitOnRegistration(domain string, providerReference prov
 	}
 
 	if message != "" {
-		(*callback)(EventDetails{
+		callback(EventDetails{
 			ProviderName: providerReference.featureProvider.Metadata().Name,
 			ProviderEventDetails: ProviderEventDetails{
 				Message: message,
@@ -289,7 +334,7 @@ func (e *eventExecutor) triggerEvent(event Event, handler FeatureProvider) {
 
 	// first run API handlers
 	for _, c := range e.apiRegistry[event.EventType] {
-		e.executeHandler(*c, event)
+		e.executeHandler(c, event)
 	}
 
 	// then run client handlers
@@ -300,7 +345,7 @@ func (e *eventExecutor) triggerEvent(event Event, handler FeatureProvider) {
 
 		e.states.Store(domain, stateFromEvent(event))
 		for _, c := range e.scopedRegistry[domain].callbacks[event.EventType] {
-			e.executeHandler(*c, event)
+			e.executeHandler(c, event)
 		}
 	}
 
@@ -318,7 +363,7 @@ func (e *eventExecutor) triggerEvent(event Event, handler FeatureProvider) {
 		}
 
 		for _, c := range registry.callbacks[event.EventType] {
-			e.executeHandler(*c, event)
+			e.executeHandler(c, event)
 		}
 	}
 }

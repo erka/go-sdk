@@ -14,20 +14,20 @@ import (
 type clientMocks struct {
 	clientHandlerAPI *MockclientEvent
 	evaluationAPI    *MockevaluationImpl
-	providerAPI      *MockFeatureProvider
+	providerAPI      *MockProvider
 }
 
 func hydratedMocksForClientTests(t *testing.T, expectedEvaluations int) clientMocks {
 	ctrl := gomock.NewController(t)
 	mockClientAPI := NewMockclientEvent(ctrl)
 	mockEvaluationAPI := NewMockevaluationImpl(ctrl)
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 
 	mockClientAPI.EXPECT().State(gomock.Any()).AnyTimes().Return(ReadyState)
 
 	mockProvider.EXPECT().Metadata().AnyTimes()
 	mockProvider.EXPECT().Hooks().AnyTimes()
-	mockEvaluationAPI.EXPECT().ForEvaluation(gomock.Any()).Times(expectedEvaluations).DoAndReturn(func(_ string) (*MockFeatureProvider, []Hook, EvaluationContext) {
+	mockEvaluationAPI.EXPECT().ForEvaluation(gomock.Any()).Times(expectedEvaluations).DoAndReturn(func(_ string) (*MockProvider, []Hook, EvaluationContext) {
 		return mockProvider, nil, EvaluationContext{}
 	})
 
@@ -90,11 +90,11 @@ func TestRequirements_1_3(t *testing.T) {
 	client := NewClient("test-client")
 
 	type requirements interface {
-		BooleanValue(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) (bool, error)
-		StringValue(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) (string, error)
-		FloatValue(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) (float64, error)
-		IntValue(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) (int64, error)
-		ObjectValue(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (any, error)
+		Boolean(ctx context.Context, flag string, defaultValue bool, evalCtx EvaluationContext, options ...Option) bool
+		String(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) string
+		Float(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) float64
+		Int(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) int64
+		Object(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) any
 	}
 
 	var clientI any = client
@@ -115,7 +115,7 @@ func TestRequirement_1_4_1(t *testing.T) {
 		StringValueDetails(ctx context.Context, flag string, defaultValue string, evalCtx EvaluationContext, options ...Option) (StringEvaluationDetails, error)
 		FloatValueDetails(ctx context.Context, flag string, defaultValue float64, evalCtx EvaluationContext, options ...Option) (FloatEvaluationDetails, error)
 		IntValueDetails(ctx context.Context, flag string, defaultValue int64, evalCtx EvaluationContext, options ...Option) (IntEvaluationDetails, error)
-		ObjectValueDetails(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (InterfaceEvaluationDetails, error)
+		ObjectValueDetails(ctx context.Context, flag string, defaultValue any, evalCtx EvaluationContext, options ...Option) (ObjectEvaluationDetails, error)
 	}
 
 	var clientI any = client
@@ -268,7 +268,7 @@ func TestRequirement_1_4_2__1_4_5__1_4_6(t *testing.T) {
 		mocks := hydratedMocksForClientTests(t, 1)
 		client := newClient("test-client", mocks.evaluationAPI, mocks.clientHandlerAPI)
 		mocks.providerAPI.EXPECT().ObjectEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(InterfaceResolutionDetail{
+			Return(ObjectResolutionDetail{
 				Value: objectValue,
 				ProviderResolutionDetail: ProviderResolutionDetail{
 					Variant: objectVariant,
@@ -276,7 +276,8 @@ func TestRequirement_1_4_2__1_4_5__1_4_6(t *testing.T) {
 				},
 			})
 
-		evDetails, err := client.ObjectValueDetails(t.Context(), flagKey, nil, EvaluationContext{})
+		var defaultValue any
+		evDetails, err := client.ObjectValueDetails(t.Context(), flagKey, defaultValue, EvaluationContext{})
 		if err != nil {
 			t.Error(err)
 		}
@@ -395,7 +396,7 @@ func TestRequirement_1_4_4(t *testing.T) {
 		mocks := hydratedMocksForClientTests(t, 1)
 		client := newClient("test-client", mocks.evaluationAPI, mocks.clientHandlerAPI)
 		mocks.providerAPI.EXPECT().ObjectEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(InterfaceResolutionDetail{
+			Return(ObjectResolutionDetail{
 				Value: objectValue,
 				ProviderResolutionDetail: ProviderResolutionDetail{
 					Variant: objectVariant,
@@ -430,8 +431,8 @@ func TestRequirement_1_4_7(t *testing.T) {
 			},
 		})
 
-	res, err := client.evaluate(
-		t.Context(), "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
+	res, err := evaluate(
+		t.Context(), client, "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
 	)
 	if err == nil {
 		t.Error("expected err, got nil")
@@ -457,8 +458,8 @@ func TestRequirement_1_4_8(t *testing.T) {
 			},
 		})
 
-	res, err := client.evaluate(
-		t.Context(), "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
+	res, err := evaluate(
+		t.Context(), client, "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
 	)
 	if err == nil {
 		t.Error("expected err, got nil")
@@ -480,7 +481,7 @@ func TestRequirement_1_4_8(t *testing.T) {
 func TestRequirement_1_4_9(t *testing.T) {
 	flagKey := "flag-key"
 	evalCtx := EvaluationContext{}
-	flatCtx := flattenContext(evalCtx)
+	flatCtx := evalCtx.Flattened()
 
 	t.Run("Boolean", func(t *testing.T) {
 		t.Cleanup(initSingleton)
@@ -497,10 +498,7 @@ func TestRequirement_1_4_9(t *testing.T) {
 				},
 			}).Times(2)
 
-		value, err := client.BooleanValue(t.Context(), flagKey, defaultValue, evalCtx)
-		if err == nil {
-			t.Error("expected BooleanValue to return an error, got nil")
-		}
+		value := client.Boolean(t.Context(), flagKey, defaultValue, evalCtx)
 
 		if value != defaultValue {
 			t.Errorf("expected default value from BooleanValue, got %v", value)
@@ -531,10 +529,7 @@ func TestRequirement_1_4_9(t *testing.T) {
 				},
 			}).Times(2)
 
-		value, err := client.StringValue(t.Context(), flagKey, defaultValue, evalCtx)
-		if err == nil {
-			t.Error("expected StringValue to return an error, got nil")
-		}
+		value := client.String(t.Context(), flagKey, defaultValue, evalCtx)
 
 		if value != defaultValue {
 			t.Errorf("expected default value from StringValue, got %v", value)
@@ -564,10 +559,7 @@ func TestRequirement_1_4_9(t *testing.T) {
 				},
 			}).Times(2)
 
-		value, err := client.FloatValue(t.Context(), flagKey, defaultValue, evalCtx)
-		if err == nil {
-			t.Error("expected FloatValue to return an error, got nil")
-		}
+		value := client.Float(t.Context(), flagKey, defaultValue, evalCtx)
 
 		if value != defaultValue {
 			t.Errorf("expected default value from FloatValue, got %v", value)
@@ -596,10 +588,7 @@ func TestRequirement_1_4_9(t *testing.T) {
 				},
 			}).Times(2)
 
-		value, err := client.IntValue(t.Context(), flagKey, defaultValue, evalCtx)
-		if err == nil {
-			t.Error("expected IntValue to return an error, got nil")
-		}
+		value := client.Int(t.Context(), flagKey, defaultValue, evalCtx)
 
 		if value != defaultValue {
 			t.Errorf("expected default value from IntValue, got %v", value)
@@ -624,15 +613,12 @@ func TestRequirement_1_4_9(t *testing.T) {
 		}
 		defaultValue := obj{foo: "bar"}
 		mocks.providerAPI.EXPECT().ObjectEvaluation(t.Context(), flagKey, defaultValue, flatCtx).
-			Return(InterfaceResolutionDetail{
+			Return(ObjectResolutionDetail{
 				ProviderResolutionDetail: ProviderResolutionDetail{
 					ResolutionError: NewGeneralResolutionError("test"),
 				},
 			}).Times(2)
-		value, err := client.ObjectValue(t.Context(), flagKey, defaultValue, evalCtx)
-		if err == nil {
-			t.Error("expected ObjectValue to return an error, got nil")
-		}
+		value := client.Object(t.Context(), flagKey, defaultValue, evalCtx)
 
 		if value != defaultValue {
 			t.Errorf("expected default value from ObjectValue, got %v", value)
@@ -673,8 +659,8 @@ func TestRequirement_1_4_12(t *testing.T) {
 				ResolutionError: NewGeneralResolutionError(errMessage),
 			},
 		})
-	evalDetails, err := client.evaluate(
-		t.Context(), "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
+	evalDetails, err := evaluate(
+		t.Context(), client, "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
 	)
 	if err == nil {
 		t.Error("expected err, got nil")
@@ -695,7 +681,7 @@ func TestRequirement_1_4_12(t *testing.T) {
 func TestRequirement_1_4_13(t *testing.T) {
 	flagKey := "flag-key"
 	evalCtx := EvaluationContext{}
-	flatCtx := flattenContext(evalCtx)
+	flatCtx := evalCtx.Flattened()
 
 	t.Run("No Metadata", func(t *testing.T) {
 		t.Cleanup(initSingleton)
@@ -808,7 +794,7 @@ func TestTrack(t *testing.T) {
 	// mockTrackingProvider is a feature provider that implements tracker contract.
 	type mockTrackingProvider struct {
 		*MockTracker
-		*MockFeatureProvider
+		*MockProvider
 	}
 
 	type testcase struct {
@@ -816,7 +802,7 @@ func TestTrack(t *testing.T) {
 		eventName string
 		outCtx    EvaluationContext
 		// allow asserting the input to provider
-		provider func(tc *testcase, provider *MockFeatureProvider) FeatureProvider
+		provider func(tc *testcase, provider *MockProvider) FeatureProvider
 	}
 
 	tests := map[string]*testcase{
@@ -858,10 +844,10 @@ func TestTrack(t *testing.T) {
 					"4": "invocation",
 				},
 			},
-			provider: func(tc *testcase, mockProvider *MockFeatureProvider) FeatureProvider {
+			provider: func(tc *testcase, mockProvider *MockProvider) FeatureProvider {
 				provider := &mockTrackingProvider{
-					MockTracker:         NewMockTracker(mockProvider.ctrl),
-					MockFeatureProvider: mockProvider,
+					MockTracker:  NewMockTracker(mockProvider.ctrl),
+					MockProvider: mockProvider,
 				}
 				// assert AnyTimesif Track is called once with evalCtx expected
 				provider.MockTracker.EXPECT().Track(gomock.Any(), gomock.Any(), tc.outCtx, TrackingEventDetails{}).Times(1)
@@ -873,7 +859,7 @@ func TestTrack(t *testing.T) {
 			inCtx:     inputCtx{},
 			eventName: "example-event",
 			outCtx:    EvaluationContext{},
-			provider: func(tc *testcase, provider *MockFeatureProvider) FeatureProvider {
+			provider: func(tc *testcase, provider *MockProvider) FeatureProvider {
 				return provider
 			},
 		},
@@ -963,7 +949,7 @@ func TestFlattenContext(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			out := flattenContext(test.inCtx)
+			out := test.inCtx.Flattened()
 			if !reflect.DeepEqual(test.outCtx, out) {
 				t.Errorf(
 					"%s, unexpected value received from flatten context, expected %v got %v",
@@ -990,12 +976,7 @@ func TestBeforeHookNilContext(t *testing.T) {
 	evalCtx := EvaluationContext{attributes: attributes}
 	mocks.providerAPI.EXPECT().BooleanEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), attributes)
 
-	_, err := client.BooleanValue(
-		t.Context(), "foo", false, evalCtx, WithHooks(hookNilContext),
-	)
-	if err != nil {
-		t.Error(err)
-	}
+	_ = client.Boolean(t.Context(), "foo", false, evalCtx, WithHooks(hookNilContext))
 }
 
 func TestErrorCodeFromProviderReturnedInEvaluationDetails(t *testing.T) {
@@ -1013,8 +994,8 @@ func TestErrorCodeFromProviderReturnedInEvaluationDetails(t *testing.T) {
 			},
 		})
 
-	evalDetails, err := client.evaluate(
-		t.Context(), "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
+	evalDetails, err := evaluate(
+		t.Context(), client, "foo", Boolean, true, EvaluationContext{}, EvaluationOptions{},
 	)
 	if err == nil {
 		t.Error("expected err, got nil")
@@ -1038,7 +1019,7 @@ func TestObjectEvaluationShouldSupportNilValue(t *testing.T) {
 	mocks := hydratedMocksForClientTests(t, 1)
 	client := newClient("test-client", mocks.evaluationAPI, mocks.clientHandlerAPI)
 	mocks.providerAPI.EXPECT().ObjectEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(InterfaceResolutionDetail{
+		Return(ObjectResolutionDetail{
 			Value: value,
 			ProviderResolutionDetail: ProviderResolutionDetail{
 				Variant: variant,
@@ -1216,7 +1197,7 @@ func TestRequirement_1_7_2(t *testing.T) {
 		},
 	}
 
-	if err := SetNamedProviderAndWait(t.Name(), provider); err != nil {
+	if err := SetNamedProviderAndWait(t.Context(), t.Name(), provider); err != nil {
 		t.Fatalf("failed to set up provider: %v", err)
 	}
 
@@ -1236,14 +1217,14 @@ func TestRequirement_1_7_3(t *testing.T) {
 	}{
 		NoopProvider{},
 		&stateHandlerForTests{
-			initF: func(e EvaluationContext) error {
+			initF: func(context.Context, EvaluationContext) error {
 				return errors.New("whoops... error from initialization")
 			},
 		},
 		&ProviderEventing{},
 	}
 
-	_ = SetNamedProviderAndWait(t.Name(), provider)
+	_ = SetNamedProviderAndWait(t.Context(), t.Name(), provider)
 	if NewClient(t.Name()).State() != ErrorState {
 		t.Fatalf("expected client to report ERROR state")
 	}
@@ -1260,14 +1241,14 @@ func TestRequirement_1_7_4(t *testing.T) {
 	}{
 		NoopProvider{},
 		&stateHandlerForTests{
-			initF: func(e EvaluationContext) error {
+			initF: func(context.Context, EvaluationContext) error {
 				return errors.New("whoops... error from initialization")
 			},
 		},
 		&ProviderEventing{},
 	}
 
-	_ = SetNamedProviderAndWait(t.Name(), provider)
+	_ = SetNamedProviderAndWait(t.Context(), t.Name(), provider)
 
 	if NewClient(t.Name()).State() != ErrorState {
 		t.Fatalf("expected client to report ERROR state")
@@ -1285,14 +1266,14 @@ func TestRequirement_1_7_5(t *testing.T) {
 	}{
 		NoopProvider{},
 		&stateHandlerForTests{
-			initF: func(e EvaluationContext) error {
+			initF: func(context.Context, EvaluationContext) error {
 				return &ProviderInitError{ErrorCode: ProviderFatalCode}
 			},
 		},
 		&ProviderEventing{},
 	}
 
-	_ = SetNamedProviderAndWait(t.Name(), provider)
+	_ = SetNamedProviderAndWait(t.Context(), t.Name(), provider)
 
 	if NewClient(t.Name()).State() != FatalState {
 		t.Fatalf("expected client to report ERROR state")
@@ -1306,7 +1287,7 @@ func TestRequirement_1_7_6(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockHook := NewMockHook(ctrl)
-	mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), ProviderNotReadyError, gomock.Any())
+	mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), ErrProviderNotReady, gomock.Any())
 	mockHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
 	notReadyEventingProvider := struct {
@@ -1316,7 +1297,7 @@ func TestRequirement_1_7_6(t *testing.T) {
 	}{
 		NoopProvider{},
 		&stateHandlerForTests{
-			initF: func(e EvaluationContext) error {
+			initF: func(context.Context, EvaluationContext) error {
 				<-time.After(math.MaxInt)
 				return nil
 			},
@@ -1324,7 +1305,7 @@ func TestRequirement_1_7_6(t *testing.T) {
 		&ProviderEventing{},
 	}
 
-	_ = SetProvider(notReadyEventingProvider)
+	_ = SetProvider(t.Context(), notReadyEventingProvider)
 
 	client := NewClient("somOtherClient")
 	client.AddHooks(mockHook)
@@ -1334,10 +1315,7 @@ func TestRequirement_1_7_6(t *testing.T) {
 	}
 
 	defaultVal := true
-	res, err := client.BooleanValue(t.Context(), "a-flag", defaultVal, EvaluationContext{})
-	if err == nil {
-		t.Fatalf("expected client to report an error")
-	}
+	res := client.Boolean(t.Context(), "a-flag", defaultVal, EvaluationContext{})
 
 	if res != defaultVal {
 		t.Fatalf("expected resolved boolean value to default to %t, got %t", defaultVal, res)
@@ -1355,21 +1333,21 @@ func TestRequirement_1_7_7(t *testing.T) {
 	}{
 		NoopProvider{},
 		&stateHandlerForTests{
-			initF: func(e EvaluationContext) error {
+			initF: func(context.Context, EvaluationContext) error {
 				return &ProviderInitError{ErrorCode: ProviderFatalCode}
 			},
 		},
 		&ProviderEventing{},
 	}
 
-	err := SetNamedProviderAndWait(t.Name(), provider)
+	err := SetNamedProviderAndWait(t.Context(), t.Name(), provider)
 	if err == nil {
 		t.Errorf("provider registration was expected to fail but succeeded unexpectedly")
 	}
 
 	ctrl := gomock.NewController(t)
 	mockHook := NewMockHook(ctrl)
-	mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), ProviderFatalError, gomock.Any())
+	mockHook.EXPECT().Error(gomock.Any(), gomock.Any(), ErrProviderFatal, gomock.Any())
 	mockHook.EXPECT().Finally(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
 	client := NewClient(t.Name())
@@ -1380,10 +1358,7 @@ func TestRequirement_1_7_7(t *testing.T) {
 	}
 
 	defaultVal := true
-	res, err := client.BooleanValue(t.Context(), "a-flag", defaultVal, EvaluationContext{})
-	if err == nil {
-		t.Fatalf("expected client to report an error")
-	}
+	res := client.Boolean(t.Context(), "a-flag", defaultVal, EvaluationContext{})
 
 	if res != defaultVal {
 		t.Fatalf("expected resolved boolean value to default to %t, got %t", defaultVal, res)
@@ -1420,7 +1395,7 @@ func TestRequirement_5_3_5(t *testing.T) {
 		eventing,
 	}
 
-	if err := SetNamedProviderAndWait(t.Name(), provider); err != nil {
+	if err := SetNamedProviderAndWait(t.Context(), t.Name(), provider); err != nil {
 		t.Fatalf("failed to set up provider: %v", err)
 	}
 

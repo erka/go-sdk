@@ -3,11 +3,11 @@ package memprovider
 import (
 	"testing"
 
-	"github.com/open-feature/go-sdk/openfeature"
+	"go.openfeature.dev/openfeature"
 )
 
 func TestInMemoryProvider_boolean(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"boolFlag": {
 			Key:            "boolFlag",
 			State:          Enabled,
@@ -32,7 +32,7 @@ func TestInMemoryProvider_boolean(t *testing.T) {
 }
 
 func TestInMemoryProvider_String(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"stringFlag": {
 			Key:            "stringFlag",
 			State:          Enabled,
@@ -57,7 +57,7 @@ func TestInMemoryProvider_String(t *testing.T) {
 }
 
 func TestInMemoryProvider_Float(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"floatFlag": {
 			Key:            "floatFlag",
 			State:          Enabled,
@@ -82,7 +82,7 @@ func TestInMemoryProvider_Float(t *testing.T) {
 }
 
 func TestInMemoryProvider_Int(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"intFlag": {
 			Key:            "intFlag",
 			State:          Enabled,
@@ -107,7 +107,7 @@ func TestInMemoryProvider_Int(t *testing.T) {
 }
 
 func TestInMemoryProvider_Object(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"objectFlag": {
 			Key:            "objectFlag",
 			State:          Enabled,
@@ -139,7 +139,7 @@ func TestInMemoryProvider_WithContext(t *testing.T) {
 		return callerFlag.Variants[s.(string)], openfeature.ProviderResolutionDetail{}
 	}
 
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"contextFlag": {
 			Key:            "contextFlag",
 			State:          Enabled,
@@ -166,7 +166,7 @@ func TestInMemoryProvider_WithContext(t *testing.T) {
 }
 
 func TestInMemoryProvider_MissingFlag(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{})
+	memoryProvider := NewProvider(map[string]InMemoryFlag{})
 
 	ctx := t.Context()
 
@@ -188,7 +188,7 @@ func TestInMemoryProvider_MissingFlag(t *testing.T) {
 }
 
 func TestInMemoryProvider_TypeMismatch(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"boolFlag": {
 			Key:            "boolFlag",
 			State:          Enabled,
@@ -217,7 +217,7 @@ func TestInMemoryProvider_TypeMismatch(t *testing.T) {
 }
 
 func TestInMemoryProvider_Disabled(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{
+	memoryProvider := NewProvider(map[string]InMemoryFlag{
 		"boolFlag": {
 			Key:            "boolFlag",
 			State:          Disabled,
@@ -246,7 +246,7 @@ func TestInMemoryProvider_Disabled(t *testing.T) {
 }
 
 func TestInMemoryProvider_Metadata(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{})
+	memoryProvider := NewProvider(map[string]InMemoryFlag{})
 
 	metadata := memoryProvider.Metadata()
 
@@ -260,6 +260,6 @@ func TestInMemoryProvider_Metadata(t *testing.T) {
 }
 
 func TestInMemoryProvider_Track(t *testing.T) {
-	memoryProvider := NewInMemoryProvider(map[string]InMemoryFlag{})
+	memoryProvider := NewProvider(map[string]InMemoryFlag{})
 	memoryProvider.Track(t.Context(), "example-event-name", openfeature.EvaluationContext{}, openfeature.TrackingEventDetails{})
 }

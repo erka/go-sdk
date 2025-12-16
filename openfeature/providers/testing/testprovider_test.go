@@ -1,18 +1,17 @@
 package testing
 
 import (
-	"context"
 	"testing"
 
-	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/open-feature/go-sdk/openfeature/memprovider"
+	"go.openfeature.dev/openfeature"
+	memprovider "go.openfeature.dev/openfeature/providers/inmemory"
 )
 
 func TestParallelSingletonUsage(t *testing.T) {
 	t.Parallel()
 
-	testProvider := NewTestProvider()
-	err := openfeature.SetProviderAndWait(testProvider)
+	testProvider := NewProvider()
+	err := openfeature.SetProviderAndWait(t.Context(), testProvider)
 	if err != nil {
 		t.Errorf("unable to set provider")
 	}
@@ -53,7 +52,7 @@ func TestParallelSingletonUsage(t *testing.T) {
 			t.Parallel()
 			testProvider.UsingFlags(t, tt.flags)
 
-			got := functionUnderTest()
+			got := functionUnderTest(t)
 
 			if got != tt.want {
 				t.Fatalf("uh oh, value is not as expected: got %v, want %v", got, tt.want)
@@ -63,7 +62,7 @@ func TestParallelSingletonUsage(t *testing.T) {
 }
 
 func TestTestAwareProvider(t *testing.T) {
-	taw := NewTestProvider()
+	taw := NewProvider()
 
 	flags := map[string]memprovider.InMemoryFlag{
 		"ff-bool": {
@@ -151,13 +150,14 @@ func Test_TestAwareProviderPanics(t *testing.T) {
 			}
 		}()
 
-		taw := NewTestProvider()
+		taw := NewProvider()
 		taw.BooleanEvaluation(t.Context(), "my-flag", true, openfeature.FlattenedContext{})
 	})
 }
 
-func functionUnderTest() bool {
+func functionUnderTest(tb testing.TB) bool {
+	tb.Helper()
 	got := openfeature.NewDefaultClient().
-		Boolean(context.TODO(), "my_flag", false, openfeature.EvaluationContext{})
+		Boolean(tb.Context(), "my_flag", false, openfeature.EvaluationContext{})
 	return got
 }

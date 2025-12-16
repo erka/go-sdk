@@ -1,6 +1,7 @@
 package openfeature
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -15,13 +16,13 @@ func TestRequirement_1_1_1(t *testing.T) {
 	t.Cleanup(initSingleton)
 
 	ctrl := gomock.NewController(t)
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 	mockProvider.EXPECT().Metadata().AnyTimes()
 
 	ofAPI := api
 
 	// set through instance level
-	err := ofAPI.SetProvider(mockProvider)
+	err := ofAPI.SetProvider(t.Context(), mockProvider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -38,11 +39,11 @@ func TestRequirement_1_1_2_1(t *testing.T) {
 	t.Cleanup(initSingleton)
 	ctrl := gomock.NewController(t)
 
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 	mockProviderName := "mock-provider"
 	mockProvider.EXPECT().Metadata().Return(Metadata{Name: mockProviderName}).AnyTimes()
 
-	err := SetProvider(mockProvider)
+	err := SetProvider(t.Context(), mockProvider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -60,7 +61,7 @@ func TestRequirement_1_1_2_2(t *testing.T) {
 
 		provider, initSem, _ := setupProviderWithSemaphores()
 
-		err := SetProvider(provider)
+		err := SetProvider(t.Context(), provider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -85,7 +86,7 @@ func TestRequirement_1_1_2_2(t *testing.T) {
 
 		client := "client"
 
-		err := SetNamedProvider(client, provider)
+		err := SetNamedProvider(t.Context(), client, provider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -112,7 +113,7 @@ func TestRequirement_1_1_2_3(t *testing.T) {
 
 		provider, initSem, shutdownSem := setupProviderWithSemaphores()
 
-		err := SetProvider(provider)
+		err := SetProvider(t.Context(), provider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -127,7 +128,7 @@ func TestRequirement_1_1_2_3(t *testing.T) {
 
 		providerOverride, _, _ := setupProviderWithSemaphores()
 
-		err = SetProvider(providerOverride)
+		err = SetProvider(t.Context(), providerOverride)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -148,7 +149,7 @@ func TestRequirement_1_1_2_3(t *testing.T) {
 
 		client := "client"
 
-		err := SetNamedProvider(client, provider)
+		err := SetNamedProvider(t.Context(), client, provider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -163,7 +164,7 @@ func TestRequirement_1_1_2_3(t *testing.T) {
 
 		providerOverride, _, _ := setupProviderWithSemaphores()
 
-		err = SetNamedProvider(client, providerOverride)
+		err = SetNamedProvider(t.Context(), client, providerOverride)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -184,21 +185,21 @@ func TestRequirement_1_1_2_3(t *testing.T) {
 		provider, _, shutdownSem := setupProviderWithSemaphores()
 
 		// register provider multiple times
-		err := SetProvider(provider)
+		err := SetProvider(t.Context(), provider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
 
 		clientName := "clientA"
 
-		err = SetNamedProvider(clientName, provider)
+		err = SetNamedProvider(t.Context(), clientName, provider)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
 
 		providerOverride, _, _ := setupProviderWithSemaphores()
 
-		err = SetNamedProvider(clientName, providerOverride)
+		err = SetNamedProvider(t.Context(), clientName, providerOverride)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -224,19 +225,19 @@ func TestRequirement_1_1_2_3(t *testing.T) {
 		clientA := "clientA"
 		clientB := "clientB"
 
-		err := SetNamedProvider(clientA, providerA)
+		err := SetNamedProvider(t.Context(), clientA, providerA)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
 
-		err = SetNamedProvider(clientB, providerA)
+		err = SetNamedProvider(t.Context(), clientB, providerA)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
 
 		providerOverride, _, _ := setupProviderWithSemaphores()
 
-		err = SetNamedProvider(clientA, providerOverride)
+		err = SetNamedProvider(t.Context(), clientA, providerOverride)
 		if err != nil {
 			t.Errorf("error setting up provider %v", err)
 		}
@@ -266,7 +267,7 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 		}{
 			NoopProvider{},
 			&stateHandlerForTests{
-				initF: func(e EvaluationContext) error {
+				initF: func(context.Context, EvaluationContext) error {
 					<-time.After(200 * time.Millisecond)
 					initialized = true
 					return nil
@@ -275,7 +276,7 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 		}
 
 		// when - registered
-		err := SetProviderAndWait(provider)
+		err := SetProviderAndWait(t.Context(), provider)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -296,7 +297,7 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 		}{
 			NoopProvider{},
 			&stateHandlerForTests{
-				initF: func(e EvaluationContext) error {
+				initF: func(context.Context, EvaluationContext) error {
 					<-time.After(200 * time.Millisecond)
 					initialized = true
 					return nil
@@ -305,7 +306,7 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 		}
 
 		// when - registered
-		err := SetNamedProviderAndWait("someName", provider)
+		err := SetNamedProviderAndWait(t.Context(), "someName", provider)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -324,7 +325,7 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 		}{
 			NoopProvider{},
 			&stateHandlerForTests{
-				initF: func(e EvaluationContext) error {
+				initF: func(context.Context, EvaluationContext) error {
 					<-time.After(200 * time.Millisecond)
 					return errors.New("some initialization error")
 				},
@@ -336,10 +337,10 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 			errChan <- details
 		}
 
-		AddHandler(ProviderError, &errHandler)
+		AddHandler(ProviderError, errHandler)
 
 		// when
-		err := SetProviderAndWait(provider)
+		err := SetProviderAndWait(t.Context(), provider)
 
 		// then
 		if err == nil {
@@ -371,7 +372,7 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 		}{
 			NoopProvider{},
 			&stateHandlerForTests{
-				initF: func(e EvaluationContext) error {
+				initF: func(context.Context, EvaluationContext) error {
 					s <- struct{}{} // initialization is blocked until read from the channel
 					initialized = true
 					return nil
@@ -380,7 +381,7 @@ func TestRequirement_1_1_2_4(t *testing.T) {
 		}
 
 		// when - registered async
-		err := SetProvider(provider)
+		err := SetProvider(t.Context(), provider)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -401,18 +402,18 @@ func TestRequirement_1_1_3(t *testing.T) {
 	// Setup
 
 	ctrl := gomock.NewController(t)
-	providerA := NewMockFeatureProvider(ctrl)
+	providerA := NewMockProvider(ctrl)
 	providerA.EXPECT().Metadata().Return(Metadata{Name: "providerA"}).AnyTimes()
 
-	providerB := NewMockFeatureProvider(ctrl)
+	providerB := NewMockProvider(ctrl)
 	providerB.EXPECT().Metadata().Return(Metadata{Name: "providerB"}).AnyTimes()
 
-	err := SetNamedProvider("clientA", providerA)
+	err := SetNamedProvider(t.Context(), "clientA", providerA)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
 
-	err = SetNamedProvider("clientB", providerB)
+	err = SetNamedProvider(t.Context(), "clientB", providerB)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -447,10 +448,10 @@ func TestRequirement_1_1_3(t *testing.T) {
 
 	// Validate overriding: If the client-domain already has a bound provider, it is overwritten with the new mapping.
 
-	providerB2 := NewMockFeatureProvider(ctrl)
+	providerB2 := NewMockProvider(ctrl)
 	providerB2.EXPECT().Metadata().Return(Metadata{Name: "providerB2"}).AnyTimes()
 
-	err = SetNamedProvider("clientB", providerB2)
+	err = SetNamedProvider(t.Context(), "clientB", providerB2)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -491,7 +492,7 @@ func TestRequirement_1_1_5(t *testing.T) {
 
 	t.Run("default provider", func(t *testing.T) {
 		defaultProvider := NoopProvider{}
-		err := SetProvider(defaultProvider)
+		err := SetProvider(t.Context(), defaultProvider)
 		if err != nil {
 			t.Errorf("provider registration failed %v", err)
 		}
@@ -504,7 +505,7 @@ func TestRequirement_1_1_5(t *testing.T) {
 		defaultProvider := NoopProvider{}
 		name := "test-provider"
 
-		err := SetNamedProvider(name, defaultProvider)
+		err := SetNamedProvider(t.Context(), name, defaultProvider)
 		if err != nil {
 			t.Errorf("provider registration failed %v", err)
 		}
@@ -559,7 +560,7 @@ func TestRequirement_1_6_1(t *testing.T) {
 	provider, initSem, shutdownSem := setupProviderWithSemaphores()
 
 	// Setup provider and wait for initialization done
-	err := SetProvider(provider)
+	err := SetProvider(t.Context(), provider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -572,7 +573,10 @@ func TestRequirement_1_6_1(t *testing.T) {
 		break
 	}
 
-	Shutdown()
+	err = Shutdown(t.Context())
+	if err != nil {
+		t.Errorf("error while shutting down %v", err)
+	}
 
 	select {
 	// short enough wait time, but not too long
@@ -594,12 +598,15 @@ func TestRequirement_1_6_2(t *testing.T) {
 	provider1, _, shutdownSem1 := setupProviderWithSemaphores()
 
 	// Setup provider and wait for initialization done
-	err := SetProviderAndWait(provider1)
+	err := SetProviderAndWait(t.Context(), provider1)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
 
-	Shutdown()
+	err = Shutdown(t.Context())
+	if err != nil {
+		t.Errorf("error while shutting down %v", err)
+	}
 
 	// Shutdown should be synchronous. Try a non-blocking receive and fail
 	// immediately if there is not a value in the channel.
@@ -614,12 +621,15 @@ func TestRequirement_1_6_2(t *testing.T) {
 	// again, since it is now inactive.
 	provider2, _, shutdownSem2 := setupProviderWithSemaphores()
 
-	err = SetProviderAndWait(provider2)
+	err = SetProviderAndWait(t.Context(), provider2)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
 
-	Shutdown()
+	err = Shutdown(t.Context())
+	if err != nil {
+		t.Errorf("error while shutting down %v", err)
+	}
 
 	select {
 	case <-shutdownSem2:
@@ -647,10 +657,10 @@ func TestRequirement_EventCompliance(t *testing.T) {
 		client := NewClient(clientName)
 
 		// adding handlers
-		client.AddHandler(ProviderReady, &h1)
-		client.AddHandler(ProviderError, &h1)
-		client.AddHandler(ProviderStale, &h1)
-		client.AddHandler(ProviderConfigChange, &h1)
+		client.AddHandler(ProviderReady, h1)
+		client.AddHandler(ProviderError, h1)
+		client.AddHandler(ProviderStale, h1)
+		client.AddHandler(ProviderConfigChange, h1)
 
 		registry := eventing.GetClientRegistry(clientName)
 
@@ -671,10 +681,10 @@ func TestRequirement_EventCompliance(t *testing.T) {
 		}
 
 		// removing handlers
-		client.RemoveHandler(ProviderReady, &h1)
-		client.RemoveHandler(ProviderError, &h1)
-		client.RemoveHandler(ProviderStale, &h1)
-		client.RemoveHandler(ProviderConfigChange, &h1)
+		client.RemoveHandler(ProviderReady, h1)
+		client.RemoveHandler(ProviderError, h1)
+		client.RemoveHandler(ProviderStale, h1)
+		client.RemoveHandler(ProviderConfigChange, h1)
 
 		if len(registry.eventCallbacks()[ProviderReady]) > 0 {
 			t.Errorf("expected empty registrations")
@@ -698,10 +708,10 @@ func TestRequirement_EventCompliance(t *testing.T) {
 		t.Cleanup(initSingleton)
 
 		// adding handlers
-		AddHandler(ProviderReady, &h1)
-		AddHandler(ProviderError, &h1)
-		AddHandler(ProviderStale, &h1)
-		AddHandler(ProviderConfigChange, &h1)
+		AddHandler(ProviderReady, h1)
+		AddHandler(ProviderError, h1)
+		AddHandler(ProviderStale, h1)
+		AddHandler(ProviderConfigChange, h1)
 
 		registry := eventing.GetAPIRegistry()
 
@@ -722,10 +732,10 @@ func TestRequirement_EventCompliance(t *testing.T) {
 		}
 
 		// removing handlers
-		RemoveHandler(ProviderReady, &h1)
-		RemoveHandler(ProviderError, &h1)
-		RemoveHandler(ProviderStale, &h1)
-		RemoveHandler(ProviderConfigChange, &h1)
+		RemoveHandler(ProviderReady, h1)
+		RemoveHandler(ProviderError, h1)
+		RemoveHandler(ProviderStale, h1)
+		RemoveHandler(ProviderConfigChange, h1)
 
 		registry = eventing.GetAPIRegistry()
 
@@ -754,10 +764,10 @@ func TestDefaultClientUsage(t *testing.T) {
 	t.Cleanup(initSingleton)
 
 	ctrl := gomock.NewController(t)
-	defaultProvider := NewMockFeatureProvider(ctrl)
+	defaultProvider := NewMockProvider(ctrl)
 	defaultProvider.EXPECT().Metadata().Return(Metadata{Name: "defaultClientReplacement"}).AnyTimes()
 
-	err := SetProvider(defaultProvider)
+	err := SetProvider(t.Context(), defaultProvider)
 	if err != nil {
 		t.Errorf("error setting up provider %v", err)
 	}
@@ -777,30 +787,24 @@ func TestLateBindingOfDefaultProvider(t *testing.T) {
 	expectedResultFromLateDefaultProvider := "value-from-late-default-provider"
 
 	ctrl := gomock.NewController(t)
-	defaultProvider := NewMockFeatureProvider(ctrl)
+	defaultProvider := NewMockProvider(ctrl)
 	defaultProvider.EXPECT().Metadata().Return(Metadata{Name: "defaultClientReplacement"}).AnyTimes()
 	defaultProvider.EXPECT().Hooks().AnyTimes().Return([]Hook{})
 	defaultProvider.EXPECT().StringEvaluation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(StringResolutionDetail{Value: expectedResultFromLateDefaultProvider})
 
 	client := NewClient("app")
-	strResult, err := client.StringValue(t.Context(), "flag", expectedResultUnboundProvider, EvaluationContext{})
-	if err != nil {
-		t.Errorf("flag evaluation failed %v", err)
-	}
+	strResult := client.String(t.Context(), "flag", expectedResultUnboundProvider, EvaluationContext{})
 
 	if strResult != expectedResultUnboundProvider {
 		t.Errorf("expected %s, but got %s", expectedResultUnboundProvider, strResult)
 	}
 
-	err = SetProviderAndWait(defaultProvider)
+	err := SetProviderAndWait(t.Context(), defaultProvider)
 	if err != nil {
 		t.Errorf("provider registration failed %v", err)
 	}
 
-	strResult, err = client.StringValue(t.Context(), "flag", "default", EvaluationContext{})
-	if err != nil {
-		t.Errorf("flag evaluation failed %v", err)
-	}
+	strResult = client.String(t.Context(), "flag", "default", EvaluationContext{})
 
 	if strResult != expectedResultFromLateDefaultProvider {
 		t.Errorf("expected %s, but got %s", expectedResultFromLateDefaultProvider, strResult)
@@ -811,12 +815,12 @@ func TestLateBindingOfDefaultProvider(t *testing.T) {
 func TestForNilProviders(t *testing.T) {
 	t.Cleanup(initSingleton)
 
-	err := SetProvider(nil)
+	err := SetProvider(t.Context(), nil)
 	if err == nil {
 		t.Errorf("setting nil provider must result in an error")
 	}
 
-	err = SetNamedProvider("client", nil)
+	err = SetNamedProvider(t.Context(), "client", nil)
 	if err == nil {
 		t.Errorf("setting nil named provider must result in an error")
 	}
@@ -839,13 +843,14 @@ func setupProviderWithSemaphores() (struct {
 
 	sh := &stateHandlerForTests{
 		// Semaphore must be invoked
-		initF: func(e EvaluationContext) error {
+		initF: func(context.Context, EvaluationContext) error {
 			intiSem <- ""
 			return nil
 		},
 		// Semaphore must be invoked
-		shutdownF: func() {
+		shutdownF: func(context.Context) error {
 			shutdownSem <- ""
+			return nil
 		},
 	}
 

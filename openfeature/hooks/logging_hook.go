@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	of "github.com/open-feature/go-sdk/openfeature"
+	of "go.openfeature.dev/openfeature"
 )
 
 const (
@@ -27,6 +27,8 @@ type LoggingHook struct {
 	includeEvaluationContext bool
 	logger                   *slog.Logger
 }
+
+var _ of.Hook = (*LoggingHook)(nil)
 
 // NewLoggingHook returns a new [LoggingHook] with the provided logger.
 func NewLoggingHook(includeEvaluationContext bool, logger *slog.Logger) *LoggingHook {
@@ -54,15 +56,15 @@ func (h *LoggingHook) buildArgs(hookContext of.HookContext) []slog.Attr {
 	return args
 }
 
-func (h *LoggingHook) Before(ctx context.Context, hookContext of.HookContext, hookHints of.HookHints) (*of.EvaluationContext, error) {
+func (h *LoggingHook) Before(ctx context.Context, hookContext of.HookContext, hookHints of.HookHints) (context.Context, *of.EvaluationContext, error) {
 	args := h.buildArgs(hookContext)
 	args = append(args, slog.String(stageKey, "before"))
 	h.logger.LogAttrs(ctx, slog.LevelDebug, "Before stage", args...)
-	return nil, nil
+	return ctx, nil, nil
 }
 
 func (h *LoggingHook) After(ctx context.Context, hookContext of.HookContext,
-	flagEvaluationDetails of.InterfaceEvaluationDetails, hookHints of.HookHints,
+	flagEvaluationDetails of.EvaluationDetails[of.FlagTypes], hookHints of.HookHints,
 ) error {
 	args := h.buildArgs(hookContext)
 	args = append(args,
@@ -84,5 +86,5 @@ func (h *LoggingHook) Error(ctx context.Context, hookContext of.HookContext, err
 	h.logger.LogAttrs(ctx, slog.LevelError, "Error stage", args...)
 }
 
-func (h *LoggingHook) Finally(ctx context.Context, hookContext of.HookContext, flagEvaluationDetails of.InterfaceEvaluationDetails, hookHints of.HookHints) {
+func (h *LoggingHook) Finally(ctx context.Context, hookContext of.HookContext, flagEvaluationDetails of.EvaluationDetails[of.FlagTypes], hookHints of.HookHints) {
 }

@@ -150,8 +150,8 @@ func (e *ProviderInitError) Error() string {
 }
 
 var (
-	// ProviderNotReadyError signifies that an operation failed because the provider is in a NOT_READY state.
-	ProviderNotReadyError = NewProviderNotReadyResolutionError("provider not yet initialized")
-	// ProviderFatalError signifies that an operation failed because the provider is in a FATAL state.
-	ProviderFatalError = NewProviderFatalResolutionError("provider is in an irrecoverable error state")
+	// ErrProviderNotReady signifies that an operation failed because the provider is in a NOT_READY state.
+	ErrProviderNotReady = NewProviderNotReadyResolutionError("provider not yet initialized")
+	// ErrProviderFatal signifies that an operation failed because the provider is in a FATAL state.
+	ErrProviderFatal = NewProviderFatalResolutionError("provider is in an irrecoverable error state")
 )

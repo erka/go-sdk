@@ -12,7 +12,7 @@ import (
 // of type string, which identifies the provider implementation.
 func TestRequirement_2_1_1(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 
 	type requirements interface {
 		Metadata() Metadata
@@ -39,14 +39,14 @@ func TestRequirement_2_1_1(t *testing.T) {
 // and `evaluation context` (optional), which returns a `flag resolution` structure.
 func TestRequirement_2_2_1(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mockProvider := NewMockFeatureProvider(ctrl)
+	mockProvider := NewMockProvider(ctrl)
 
 	type requirements interface {
 		BooleanEvaluation(ctx context.Context, flag string, defaultValue bool, flatCtx FlattenedContext) BoolResolutionDetail
 		StringEvaluation(ctx context.Context, flag string, defaultValue string, flatCtx FlattenedContext) StringResolutionDetail
 		FloatEvaluation(ctx context.Context, flag string, defaultValue float64, flatCtx FlattenedContext) FloatResolutionDetail
 		IntEvaluation(ctx context.Context, flag string, defaultValue int64, flatCtx FlattenedContext) IntResolutionDetail
-		ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) InterfaceResolutionDetail
+		ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) ObjectResolutionDetail
 	}
 
 	var mockProviderI any = mockProvider

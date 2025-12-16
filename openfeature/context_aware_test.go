@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+var _ (StateHandler) = (*testContextAwareProvider)(nil)
+
 // testContextAwareProvider is a test provider that implements ContextAwareStateHandler
 type testContextAwareProvider struct {
 	initDelay time.Duration
@@ -16,8 +18,8 @@ func (p *testContextAwareProvider) Metadata() Metadata {
 	return Metadata{Name: "test-context-aware-provider"}
 }
 
-// InitWithContext implements ContextAwareStateHandler
-func (p *testContextAwareProvider) InitWithContext(ctx context.Context, evalCtx EvaluationContext) error {
+// Init implements StateHandler
+func (p *testContextAwareProvider) Init(ctx context.Context, evalCtx EvaluationContext) error {
 	select {
 	case <-time.After(p.initDelay):
 		return nil
@@ -26,25 +28,14 @@ func (p *testContextAwareProvider) InitWithContext(ctx context.Context, evalCtx 
 	}
 }
 
-// Init implements StateHandler for backward compatibility
-func (p *testContextAwareProvider) Init(evalCtx EvaluationContext) error {
-	return p.InitWithContext(context.Background(), evalCtx)
-}
-
-// ShutdownWithContext implements ContextAwareStateHandler
-func (p *testContextAwareProvider) ShutdownWithContext(ctx context.Context) error {
+// Shutdown implements StateHandler for backward compatibility
+func (p *testContextAwareProvider) Shutdown(ctx context.Context) error {
 	select {
 	case <-time.After(p.initDelay): // Reuse delay for shutdown simulation
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-// Shutdown implements StateHandler for backward compatibility
-func (p *testContextAwareProvider) Shutdown() {
-	// For backward compatibility, use background context with no timeout
-	_ = p.ShutdownWithContext(context.Background())
 }
 
 func (p *testContextAwareProvider) BooleanEvaluation(ctx context.Context, flag string, defaultValue bool, flatCtx FlattenedContext) BoolResolutionDetail {
@@ -75,8 +66,8 @@ func (p *testContextAwareProvider) IntEvaluation(ctx context.Context, flag strin
 	}
 }
 
-func (p *testContextAwareProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) InterfaceResolutionDetail {
-	return InterfaceResolutionDetail{
+func (p *testContextAwareProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) ObjectResolutionDetail {
+	return ObjectResolutionDetail{
 		Value:                    defaultValue,
 		ProviderResolutionDetail: ProviderResolutionDetail{Reason: DefaultReason},
 	}
@@ -107,7 +98,7 @@ func TestContextAwareInitialization(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 		defer cancel()
 
-		err := SetProviderWithContextAndWait(ctx, fastProvider)
+		err := SetProviderAndWait(ctx, fastProvider)
 		if err != nil {
 			t.Errorf("Expected fast provider to succeed, got error: %v", err)
 		}
@@ -119,7 +110,7 @@ func TestContextAwareInitialization(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 		defer cancel()
 
-		err := SetProviderWithContextAndWait(ctx, slowProvider)
+		err := SetProviderAndWait(ctx, slowProvider)
 		if err == nil {
 			t.Error("Expected timeout error but got success")
 		}
@@ -135,7 +126,7 @@ func TestContextAwareInitialization(t *testing.T) {
 		defer cancel()
 
 		start := time.Now()
-		err := SetProviderWithContext(ctx, asyncProvider)
+		err := SetProvider(ctx, asyncProvider)
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -152,7 +143,7 @@ func TestContextAwareInitialization(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 		defer cancel()
 
-		err := SetNamedProviderWithContextAndWait(ctx, "test-domain", namedProvider)
+		err := SetNamedProviderAndWait(ctx, "test-domain", namedProvider)
 		if err != nil {
 			t.Errorf("Named provider should succeed: %v", err)
 		}
@@ -164,7 +155,7 @@ func TestContextAwareInitialization(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 		defer cancel()
 
-		err := SetProviderWithContextAndWait(ctx, legacyProvider)
+		err := SetProviderAndWait(ctx, legacyProvider)
 		if err != nil {
 			t.Errorf("Legacy provider should work: %v", err)
 		}
@@ -246,14 +237,14 @@ func TestContextAwareShutdown(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
 		defer cancel()
 
-		err := SetProviderWithContextAndWait(ctx, provider)
+		err := SetProviderAndWait(ctx, provider)
 		if err != nil {
 			t.Errorf("Provider setup should succeed: %v", err)
 		}
 
 		// Now replace it to trigger shutdown
 		newProvider := &testContextAwareProvider{initDelay: 10 * time.Millisecond}
-		err = SetProviderWithContextAndWait(ctx, newProvider)
+		err = SetProviderAndWait(ctx, newProvider)
 		if err != nil {
 			t.Errorf("Provider replacement should succeed: %v", err)
 		}
@@ -267,7 +258,7 @@ func TestContextAwareShutdown(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 
-		err := SetProviderWithContextAndWait(ctx, slowShutdownProvider)
+		err := SetProviderAndWait(ctx, slowShutdownProvider)
 		if err != nil {
 			t.Errorf("Provider setup should succeed: %v", err)
 		}
@@ -275,7 +266,7 @@ func TestContextAwareShutdown(t *testing.T) {
 		// Replace with new provider - shutdown happens in background, so this should succeed
 		// even if the old provider takes a long time to shut down
 		fastProvider := &testContextAwareProvider{initDelay: 10 * time.Millisecond}
-		err = SetProviderWithContextAndWait(ctx, fastProvider)
+		err = SetProviderAndWait(ctx, fastProvider)
 		if err != nil {
 			t.Errorf("Provider replacement should succeed even with slow shutdown: %v", err)
 		}
@@ -309,13 +300,13 @@ func TestGlobalContextAwareShutdown(t *testing.T) {
 		defer cancel()
 
 		// Set default provider
-		err := SetProviderWithContextAndWait(ctx, defaultProvider)
+		err := SetProviderAndWait(ctx, defaultProvider)
 		if err != nil {
 			t.Errorf("Default provider setup should succeed: %v", err)
 		}
 
 		// Set named provider
-		err = SetNamedProviderWithContextAndWait(ctx, "test-service", namedProvider)
+		err = SetNamedProviderAndWait(ctx, "test-service", namedProvider)
 		if err != nil {
 			t.Errorf("Named provider setup should succeed: %v", err)
 		}
@@ -324,7 +315,7 @@ func TestGlobalContextAwareShutdown(t *testing.T) {
 		shutdownCtx, shutdownCancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 		defer shutdownCancel()
 
-		err = ShutdownWithContext(shutdownCtx)
+		err = Shutdown(shutdownCtx)
 		if err != nil {
 			t.Errorf("Global shutdown should succeed: %v", err)
 		}
@@ -344,7 +335,7 @@ func TestGlobalContextAwareShutdown(t *testing.T) {
 		defer cancel()
 
 		// Set the provider (this should succeed quickly)
-		err := SetProviderWithContextAndWait(ctx, slowShutdownProvider)
+		err := SetProviderAndWait(ctx, slowShutdownProvider)
 		if err != nil {
 			t.Errorf("Provider setup should succeed: %v", err)
 		}
@@ -363,7 +354,7 @@ func TestGlobalContextAwareShutdown(t *testing.T) {
 		shutdownCtx, shutdownCancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 		defer shutdownCancel()
 
-		err = ShutdownWithContext(shutdownCtx)
+		err = Shutdown(shutdownCtx)
 		if err == nil {
 			t.Error("Expected shutdown timeout error")
 		}
@@ -387,12 +378,12 @@ func TestGlobalContextAwareShutdown(t *testing.T) {
 		defer cancel()
 
 		// Set providers
-		err := SetProviderWithContextAndWait(ctx, defaultProvider)
+		err := SetProviderAndWait(ctx, defaultProvider)
 		if err != nil {
 			t.Errorf("Default provider setup should succeed: %v", err)
 		}
 
-		err = SetNamedProviderWithContextAndWait(ctx, "test-service", namedProvider)
+		err = SetNamedProviderAndWait(ctx, "test-service", namedProvider)
 		if err != nil {
 			t.Errorf("Named provider setup should succeed: %v", err)
 		}
@@ -401,7 +392,7 @@ func TestGlobalContextAwareShutdown(t *testing.T) {
 		shutdownCtx, shutdownCancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 		defer shutdownCancel()
 
-		err = ShutdownWithContext(shutdownCtx)
+		err = Shutdown(shutdownCtx)
 		if err != nil {
 			t.Errorf("Global shutdown should succeed with regular providers: %v", err)
 		}
@@ -472,8 +463,8 @@ func (p *testContextAwareProviderWithShutdownDelay) IntEvaluation(ctx context.Co
 	}
 }
 
-func (p *testContextAwareProviderWithShutdownDelay) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) InterfaceResolutionDetail {
-	return InterfaceResolutionDetail{
+func (p *testContextAwareProviderWithShutdownDelay) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) ObjectResolutionDetail {
+	return ObjectResolutionDetail{
 		Value:                    defaultValue,
 		ProviderResolutionDetail: ProviderResolutionDetail{Reason: DefaultReason},
 	}
@@ -509,7 +500,7 @@ func TestContextPropagationFixes(t *testing.T) {
 		initCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer cancel()
 
-		err := SetProviderWithContextAndWait(initCtx, provider)
+		err := SetProviderAndWait(initCtx, provider)
 		if err != nil {
 			t.Errorf("Provider setup should succeed: %v", err)
 		}
@@ -522,7 +513,7 @@ func TestContextPropagationFixes(t *testing.T) {
 		defer replaceCancel()
 
 		start := time.Now()
-		err = SetProviderWithContextAndWait(replaceCtx, newProvider)
+		err = SetProviderAndWait(replaceCtx, newProvider)
 		elapsed := time.Since(start)
 
 		// The init should succeed quickly, shutdown happens async
@@ -552,7 +543,7 @@ func TestContextPropagationFixes(t *testing.T) {
 		}
 
 		// Set up provider
-		err := SetProviderWithContextAndWait(t.Context(), provider)
+		err := SetProviderAndWait(t.Context(), provider)
 		if err != nil {
 			t.Errorf("Provider setup should succeed: %v", err)
 		}
@@ -567,7 +558,7 @@ func TestContextPropagationFixes(t *testing.T) {
 		}()
 
 		newProvider := &testContextAwareProvider{initDelay: 10 * time.Millisecond}
-		err = SetProviderWithContextAndWait(replaceCtx, newProvider)
+		err = SetProviderAndWait(replaceCtx, newProvider)
 		// Should succeed because init is fast, shutdown is async
 		if err != nil {
 			t.Errorf("Provider replacement should succeed even with cancellation: %v", err)
@@ -651,6 +642,8 @@ func TestSimplifiedErrorHandling(t *testing.T) {
 	})
 }
 
+var _ (StateHandler) = (*testProviderInitError)(nil)
+
 // testProviderInitError is a provider that returns a specific ProviderInitError
 type testProviderInitError struct {
 	initDelay time.Duration
@@ -661,7 +654,7 @@ func (p *testProviderInitError) Metadata() Metadata {
 	return Metadata{Name: "test-provider-init-error"}
 }
 
-func (p *testProviderInitError) InitWithContext(ctx context.Context, evalCtx EvaluationContext) error {
+func (p *testProviderInitError) Init(ctx context.Context, evalCtx EvaluationContext) error {
 	select {
 	case <-time.After(p.initDelay):
 		return p.initError
@@ -671,15 +664,9 @@ func (p *testProviderInitError) InitWithContext(ctx context.Context, evalCtx Eva
 	}
 }
 
-func (p *testProviderInitError) Init(evalCtx EvaluationContext) error {
-	return p.InitWithContext(context.Background(), evalCtx)
-}
-
-func (p *testProviderInitError) ShutdownWithContext(ctx context.Context) error {
+func (p *testProviderInitError) Shutdown(ctx context.Context) error {
 	return nil
 }
-
-func (p *testProviderInitError) Shutdown() {}
 
 func (p *testProviderInitError) BooleanEvaluation(ctx context.Context, flag string, defaultValue bool, flatCtx FlattenedContext) BoolResolutionDetail {
 	return BoolResolutionDetail{
@@ -709,8 +696,8 @@ func (p *testProviderInitError) IntEvaluation(ctx context.Context, flag string, 
 	}
 }
 
-func (p *testProviderInitError) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) InterfaceResolutionDetail {
-	return InterfaceResolutionDetail{
+func (p *testProviderInitError) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx FlattenedContext) ObjectResolutionDetail {
+	return ObjectResolutionDetail{
 		Value:                    defaultValue,
 		ProviderResolutionDetail: ProviderResolutionDetail{Reason: DefaultReason},
 	}
@@ -751,7 +738,7 @@ func TestEdgeCases(t *testing.T) {
 		// Rapidly switch providers
 		for i, provider := range providers {
 			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-			err := SetProviderWithContextAndWait(ctx, provider)
+			err := SetProviderAndWait(ctx, provider)
 			cancel()
 
 			if err != nil {
@@ -779,7 +766,7 @@ func TestEdgeCases(t *testing.T) {
 			defer cancel()
 
 			provider := &testContextAwareProvider{initDelay: 50 * time.Millisecond}
-			err := SetProviderWithContextAndWait(ctx, provider)
+			err := SetProviderAndWait(ctx, provider)
 			done <- err
 		}()
 
@@ -789,7 +776,7 @@ func TestEdgeCases(t *testing.T) {
 			defer cancel()
 
 			provider := &testContextAwareProvider{initDelay: 30 * time.Millisecond}
-			err := SetNamedProviderWithContextAndWait(ctx, "concurrent-test", provider)
+			err := SetNamedProviderAndWait(ctx, "concurrent-test", provider)
 			done <- err
 		}()
 

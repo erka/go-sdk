@@ -2,11 +2,10 @@ package openfeature_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
-	"github.com/open-feature/go-sdk/openfeature"
+	"go.openfeature.dev/openfeature"
 )
 
 func ExampleNewClient() {
@@ -15,89 +14,8 @@ func ExampleNewClient() {
 	// Output: Client Domain: example-client
 }
 
-func ExampleClient_BooleanValue() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
-		log.Fatalf("error setting up provider %v", err)
-	}
-	client := openfeature.NewClient("example-client")
-	value, err := client.BooleanValue(
-		context.TODO(), "test-flag", true, openfeature.EvaluationContext{},
-	)
-	if err != nil {
-		log.Fatal("error while getting boolean value : ", err)
-	}
-
-	fmt.Printf("test-flag value: %v", value)
-	// Output: test-flag value: true
-}
-
-func ExampleClient_StringValue() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
-		log.Fatalf("error setting up provider %v", err)
-	}
-	client := openfeature.NewClient("example-client")
-	value, err := client.StringValue(
-		context.TODO(), "test-flag", "openfeature", openfeature.EvaluationContext{},
-	)
-	if err != nil {
-		log.Fatal("error while getting string value : ", err)
-	}
-
-	fmt.Printf("test-flag value: %v", value)
-	// Output: test-flag value: openfeature
-}
-
-func ExampleClient_FloatValue() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
-		log.Fatalf("error setting up provider %v", err)
-	}
-	client := openfeature.NewClient("example-client")
-	value, err := client.FloatValue(
-		context.TODO(), "test-flag", 0.55, openfeature.EvaluationContext{},
-	)
-	if err != nil {
-		log.Fatalf("error while getting float value: %v", err)
-	}
-
-	fmt.Printf("test-flag value: %v", value)
-	// Output: test-flag value: 0.55
-}
-
-func ExampleClient_IntValue() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
-		log.Fatalf("error setting up provider %v", err)
-	}
-	client := openfeature.NewClient("example-client")
-	value, err := client.IntValue(
-		context.TODO(), "test-flag", 3, openfeature.EvaluationContext{},
-	)
-	if err != nil {
-		log.Fatalf("error while getting int value: %v", err)
-	}
-
-	fmt.Printf("test-flag value: %v", value)
-	// Output: test-flag value: 3
-}
-
-func ExampleClient_ObjectValue() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
-		log.Fatalf("error setting up provider %v", err)
-	}
-	client := openfeature.NewClient("example-client")
-	value, err := client.ObjectValue(
-		context.TODO(), "test-flag", map[string]string{"foo": "bar"}, openfeature.EvaluationContext{},
-	)
-	if err != nil {
-		log.Fatal("error while getting object value : ", err)
-	}
-
-	str, _ := json.Marshal(value)
-	fmt.Printf("test-flag value: %v", string(str))
-	// Output: test-flag value: {"foo":"bar"}
-}
-
 func ExampleClient_Boolean() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
+	if err := openfeature.SetNamedProviderAndWait(context.TODO(), "example-client", openfeature.NoopProvider{}); err != nil {
 		log.Fatalf("error setting up provider %v", err)
 	}
 	ctx := context.TODO()
@@ -113,7 +31,7 @@ func ExampleClient_Boolean() {
 }
 
 func ExampleClient_String() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
+	if err := openfeature.SetNamedProviderAndWait(context.TODO(), "example-client", openfeature.NoopProvider{}); err != nil {
 		log.Fatalf("error setting up provider %v", err)
 	}
 	ctx := context.TODO()
@@ -125,7 +43,7 @@ func ExampleClient_String() {
 }
 
 func ExampleClient_Float() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
+	if err := openfeature.SetNamedProviderAndWait(context.TODO(), "example-client", openfeature.NoopProvider{}); err != nil {
 		log.Fatalf("error setting up provider %v", err)
 	}
 	ctx := context.TODO()
@@ -137,7 +55,7 @@ func ExampleClient_Float() {
 }
 
 func ExampleClient_Int() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
+	if err := openfeature.SetNamedProviderAndWait(context.TODO(), "example-client", openfeature.NoopProvider{}); err != nil {
 		log.Fatalf("error setting up provider %v", err)
 	}
 	ctx := context.TODO()
@@ -149,7 +67,7 @@ func ExampleClient_Int() {
 }
 
 func ExampleClient_Object() {
-	if err := openfeature.SetNamedProviderAndWait("example-client", openfeature.NoopProvider{}); err != nil {
+	if err := openfeature.SetNamedProviderAndWait(context.TODO(), "example-client", openfeature.NoopProvider{}); err != nil {
 		log.Fatalf("error setting up provider %v", err)
 	}
 	ctx := context.TODO()

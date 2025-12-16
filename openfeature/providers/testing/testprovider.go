@@ -7,14 +7,14 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/open-feature/go-sdk/openfeature"
-	"github.com/open-feature/go-sdk/openfeature/memprovider"
+	"go.openfeature.dev/openfeature"
+	memprovider "go.openfeature.dev/openfeature/providers/inmemory"
 )
 
 const testNameKey = "testName"
 
-// NewTestProvider creates a new `TestAwareProvider`
-func NewTestProvider() TestProvider {
+// NewProvider creates a new `TestAwareProvider`
+func NewProvider() TestProvider {
 	return TestProvider{
 		providers: &sync.Map{},
 	}
@@ -33,7 +33,7 @@ type TestFramework = interface{ Name() string }
 // UsingFlags sets flags for the scope of a test.
 func (tp TestProvider) UsingFlags(test TestFramework, flags map[string]memprovider.InMemoryFlag) {
 	storeGoroutineLocal(test.Name())
-	tp.providers.Store(test.Name(), memprovider.NewInMemoryProvider(flags))
+	tp.providers.Store(test.Name(), memprovider.NewProvider(flags))
 }
 
 // Cleanup deletes the flags provider bound to the current test and should be executed after each test execution
@@ -59,7 +59,7 @@ func (tp TestProvider) IntEvaluation(ctx context.Context, flag string, defaultVa
 	return tp.getProvider().IntEvaluation(ctx, flag, defaultValue, flatCtx)
 }
 
-func (tp TestProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx openfeature.FlattenedContext) openfeature.InterfaceResolutionDetail {
+func (tp TestProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx openfeature.FlattenedContext) openfeature.ObjectResolutionDetail {
 	return tp.getProvider().ObjectEvaluation(ctx, flag, defaultValue, flatCtx)
 }
 

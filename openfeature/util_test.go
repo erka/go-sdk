@@ -1,6 +1,7 @@
 package openfeature
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -35,21 +36,22 @@ func init() {
 
 // stateHandlerForTests is a StateHandler with callbacks
 type stateHandlerForTests struct {
-	initF     func(e EvaluationContext) error
-	shutdownF func()
+	initF     func(context.Context, EvaluationContext) error
+	shutdownF func(context.Context) error
 }
 
-func (s *stateHandlerForTests) Init(e EvaluationContext) error {
+func (s *stateHandlerForTests) Init(ctx context.Context, e EvaluationContext) error {
 	if s.initF != nil {
-		return s.initF(e)
+		return s.initF(ctx, e)
 	}
 	return nil
 }
 
-func (s *stateHandlerForTests) Shutdown() {
+func (s *stateHandlerForTests) Shutdown(ctx context.Context) error {
 	if s.shutdownF != nil {
-		s.shutdownF()
+		return s.shutdownF(ctx)
 	}
+	return nil
 }
 
 // ProviderEventing is an eventing implementation with invoke capability

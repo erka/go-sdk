@@ -7,8 +7,6 @@ import (
 	"maps"
 	"slices"
 	"sync"
-
-	"github.com/go-logr/logr"
 )
 
 // evaluationAPI wraps OpenFeature evaluation API functionalities
@@ -33,12 +31,12 @@ func newEvaluationAPI(eventExecutor *eventExecutor) *evaluationAPI {
 	}
 }
 
-func (api *evaluationAPI) SetProvider(provider FeatureProvider) error {
-	return api.setProvider(provider, true)
+func (api *evaluationAPI) SetProvider(ctx context.Context, provider FeatureProvider) error {
+	return api.setProviderWithContext(ctx, provider, true)
 }
 
-func (api *evaluationAPI) SetProviderAndWait(provider FeatureProvider) error {
-	return api.setProvider(provider, false)
+func (api *evaluationAPI) SetProviderAndWait(ctx context.Context, provider FeatureProvider) error {
+	return api.setProviderWithContext(ctx, provider, false)
 }
 
 // GetProviderMetadata returns the default FeatureProvider's metadata
@@ -47,33 +45,6 @@ func (api *evaluationAPI) GetProviderMetadata() Metadata {
 	defer api.mu.RUnlock()
 
 	return api.defaultProvider.Metadata()
-}
-
-// SetNamedProvider sets a provider with client name. Returns an error if FeatureProvider is nil
-func (api *evaluationAPI) SetNamedProvider(clientName string, provider FeatureProvider, async bool) error {
-	api.mu.Lock()
-	defer api.mu.Unlock()
-
-	if provider == nil {
-		return errors.New("provider cannot be set to nil")
-	}
-
-	// Initialize new named provider and Shutdown the old one
-	// Provider update must be non-blocking, hence initialization & Shutdown happens concurrently
-	oldProvider := api.namedProviders[clientName]
-	api.namedProviders[clientName] = provider
-
-	err := api.initNewAndShutdownOld(context.Background(), clientName, provider, oldProvider, async)
-	if err != nil {
-		return err
-	}
-
-	err = api.eventExecutor.registerNamedEventingProvider(clientName, provider)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // GetNamedProviderMetadata returns the default FeatureProvider's metadata
@@ -87,18 +58,6 @@ func (api *evaluationAPI) GetNamedProviderMetadata(name string) Metadata {
 	}
 
 	return provider.Metadata()
-}
-
-// Context-aware provider setup methods
-
-// SetProviderWithContext sets the default FeatureProvider with context-aware initialization.
-func (api *evaluationAPI) SetProviderWithContext(ctx context.Context, provider FeatureProvider) error {
-	return api.setProviderWithContext(ctx, provider, true)
-}
-
-// SetProviderWithContextAndWait sets the default FeatureProvider with context-aware initialization and waits for completion.
-func (api *evaluationAPI) SetProviderWithContextAndWait(ctx context.Context, provider FeatureProvider) error {
-	return api.setProviderWithContext(ctx, provider, false)
 }
 
 // setProviderWithContext sets the default FeatureProvider of the evaluationAPI with context-aware initialization.
@@ -126,8 +85,8 @@ func (api *evaluationAPI) setProviderWithContext(ctx context.Context, provider F
 	return nil
 }
 
-// SetNamedProviderWithContext sets a provider with client name using context-aware initialization.
-func (api *evaluationAPI) SetNamedProviderWithContext(ctx context.Context, clientName string, provider FeatureProvider, async bool) error {
+// setNamedProviderWithContext sets a provider with client name using context-aware initialization.
+func (api *evaluationAPI) setNamedProviderWithContext(ctx context.Context, clientName string, provider FeatureProvider, async bool) error {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
@@ -152,9 +111,14 @@ func (api *evaluationAPI) SetNamedProviderWithContext(ctx context.Context, clien
 	return nil
 }
 
+// SetNamedProviderWithContext sets a provider with client name using context-aware initialization.
+func (api *evaluationAPI) SetNamedProvider(ctx context.Context, clientName string, provider FeatureProvider) error {
+	return api.setNamedProviderWithContext(ctx, clientName, provider, true)
+}
+
 // SetNamedProviderWithContextAndWait sets a provider with client name using context-aware initialization and waits for completion.
-func (api *evaluationAPI) SetNamedProviderWithContextAndWait(ctx context.Context, clientName string, provider FeatureProvider) error {
-	return api.SetNamedProviderWithContext(ctx, clientName, provider, false)
+func (api *evaluationAPI) SetNamedProviderAndWait(ctx context.Context, clientName string, provider FeatureProvider) error {
+	return api.setNamedProviderWithContext(ctx, clientName, provider, false)
 }
 
 // initNewAndShutdownOld is the main helper to initialise new FeatureProvider and Shutdown the old FeatureProvider.
@@ -194,14 +158,8 @@ func (api *evaluationAPI) initNewAndShutdownOld(ctx context.Context, clientName 
 	}
 
 	go func(forShutdown StateHandler, parentCtx context.Context) {
-		// Check if the provider supports context-aware shutdown
-		if contextHandler, ok := forShutdown.(ContextAwareStateHandler); ok {
-			// Use the provided context directly - user controls timeout
-			_ = contextHandler.ShutdownWithContext(parentCtx)
-		} else {
-			// Fall back to regular shutdown for backward compatibility
-			forShutdown.Shutdown()
-		}
+		// FIXME: what to do with this error? slog?
+		_ = forShutdown.Shutdown(parentCtx)
 	}(v, ctx)
 
 	return nil
@@ -216,12 +174,12 @@ func (api *evaluationAPI) GetNamedProviders() map[string]FeatureProvider {
 }
 
 // GetClient returns a IClient bound to the default provider
-func (api *evaluationAPI) GetClient() IClient {
+func (api *evaluationAPI) GetClient() *Client {
 	return newClient("", api, api.eventExecutor)
 }
 
 // GetNamedClient returns a IClient bound to the given named provider
-func (api *evaluationAPI) GetNamedClient(clientName string) IClient {
+func (api *evaluationAPI) GetNamedClient(clientName string) *Client {
 	return newClient(clientName, api, api.eventExecutor)
 }
 
@@ -230,10 +188,6 @@ func (api *evaluationAPI) SetEvaluationContext(evalCtx EvaluationContext) {
 	defer api.mu.Unlock()
 
 	api.evalCtx = evalCtx
-}
-
-// Deprecated: use [github.com/open-feature/go-sdk/openfeature/hooks.LoggingHook] instead.
-func (api *evaluationAPI) SetLogger(l logr.Logger) {
 }
 
 func (api *evaluationAPI) AddHooks(hooks ...Hook) {
@@ -260,16 +214,9 @@ func (api *evaluationAPI) RemoveHandler(eventType EventType, callback EventCallb
 	api.eventExecutor.RemoveHandler(eventType, callback)
 }
 
-func (api *evaluationAPI) Shutdown() {
-	// Use the context-aware shutdown with background context and ignore errors
-	// to maintain backward compatibility (Shutdown doesn't return an error)
-	_ = api.ShutdownWithContext(context.Background())
-}
-
-// ShutdownWithContext calls context-aware shutdown on all registered providers.
-// If providers implement ContextAwareStateHandler, ShutdownWithContext will be called with the provided context.
+// Shutdown calls shutdown on all registered providers.
 // Returns an error if any provider shutdown fails or if context is cancelled during shutdown.
-func (api *evaluationAPI) ShutdownWithContext(ctx context.Context) error {
+func (api *evaluationAPI) Shutdown(ctx context.Context) error {
 	api.mu.Lock()
 	defer api.mu.Unlock()
 
@@ -277,23 +224,19 @@ func (api *evaluationAPI) ShutdownWithContext(ctx context.Context) error {
 
 	// Shutdown default provider
 	if api.defaultProvider != nil {
-		if contextHandler, ok := api.defaultProvider.(ContextAwareStateHandler); ok {
-			if err := contextHandler.ShutdownWithContext(ctx); err != nil {
+		if stateHandler, ok := api.defaultProvider.(StateHandler); ok {
+			if err := stateHandler.Shutdown(ctx); err != nil {
 				errs = append(errs, fmt.Errorf("default provider shutdown failed: %w", err))
 			}
-		} else if stateHandler, ok := api.defaultProvider.(StateHandler); ok {
-			stateHandler.Shutdown()
 		}
 	}
 
 	// Shutdown all named providers
 	for name, provider := range api.namedProviders {
-		if contextHandler, ok := provider.(ContextAwareStateHandler); ok {
-			if err := contextHandler.ShutdownWithContext(ctx); err != nil {
+		if stateHandler, ok := provider.(StateHandler); ok {
+			if err := stateHandler.Shutdown(ctx); err != nil {
 				errs = append(errs, fmt.Errorf("named provider %q shutdown failed: %w", name, err))
 			}
-		} else if stateHandler, ok := provider.(StateHandler); ok {
-			stateHandler.Shutdown()
 		}
 	}
 
@@ -324,32 +267,6 @@ func (api *evaluationAPI) GetProvider() FeatureProvider {
 	return api.defaultProvider
 }
 
-// SetProvider sets the default FeatureProvider of the evaluationAPI.
-// Returns an error if provider registration cause an error
-func (api *evaluationAPI) setProvider(provider FeatureProvider, async bool) error {
-	api.mu.Lock()
-	defer api.mu.Unlock()
-
-	if provider == nil {
-		return errors.New("default provider cannot be set to nil")
-	}
-
-	oldProvider := api.defaultProvider
-	api.defaultProvider = provider
-
-	err := api.initNewAndShutdownOld(context.Background(), "", provider, oldProvider, async)
-	if err != nil {
-		return err
-	}
-
-	err = api.eventExecutor.registerDefaultProvider(provider)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // initializerWithContext is a context-aware helper to execute provider initialization and generate appropriate event for the initialization
 // If the provider implements ContextAwareStateHandler, InitWithContext is called; otherwise, Init is called for backward compatibility.
 // It also returns an error if the initialization resulted in an error or if the context is cancelled.
@@ -361,10 +278,10 @@ func initializerWithContext(ctx context.Context, provider FeatureProvider, evalC
 			Message: "Provider initialization successful",
 		},
 	}
+	var err error
 
-	// Check for context-aware handler first
-	if contextHandler, ok := provider.(ContextAwareStateHandler); ok {
-		err := contextHandler.InitWithContext(ctx, evalCtx)
+	if contextHandler, ok := provider.(StateHandler); ok {
+		err = contextHandler.Init(ctx, evalCtx)
 		if err != nil {
 			event.EventType = ProviderError
 
@@ -380,26 +297,6 @@ func initializerWithContext(ctx context.Context, provider FeatureProvider, evalC
 			} else {
 				event.Message = fmt.Sprintf("Provider initialization failed: %v", err)
 			}
-		}
-		return event, err
-	}
-
-	// Fall back to regular StateHandler for backward compatibility
-	handler, ok := provider.(StateHandler)
-	if !ok {
-		// Note - a provider without state handling capability can be assumed to be ready immediately.
-		return event, nil
-	}
-
-	err := handler.Init(evalCtx)
-	if err != nil {
-		event.EventType = ProviderError
-		event.Message = fmt.Sprintf("Provider initialization failed: %v", err)
-		var initErr *ProviderInitError
-		if errors.As(err, &initErr) {
-			event.EventType = ProviderError
-			event.ErrorCode = initErr.ErrorCode
-			event.Message = initErr.Message
 		}
 	}
 
