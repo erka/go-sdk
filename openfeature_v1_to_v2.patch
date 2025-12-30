@@ -37,12 +37,12 @@ var value, err, client identifier
 @@
 var value, err, client identifier
 @@
--value, err := client.FloatValue()
+-value, err := client.FloatValue(...)
 +value := client.Float(...)
 @@
 var value, err, client identifier
 @@
--value, err = client.FloatValue()
+-value, err = client.FloatValue(...)
 +value = client.Float(...)
 # ObjectValue
 @@
@@ -56,12 +56,18 @@ var value, err, client identifier
 -value, err = client.ObjectValue(...)
 +value = client.Object(...)
 
+@@
+var client identifier
+@@
+-client.Metadata().Name
++client.Metadata().Domain()
+
 # set provider
 @@
 var openfeature identifier
 var provider expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetProvider(provider)
 +openfeature.SetProvider(context.TODO(), provider) 
@@ -70,7 +76,7 @@ import openfeature "go.openfeature.dev/openfeature/v2"
 var openfeature identifier
 var ctx, provider expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetProviderWithContext(ctx, provider)
 +openfeature.SetProvider(ctx, provider)
@@ -79,7 +85,7 @@ import openfeature "go.openfeature.dev/openfeature/v2"
 var openfeature identifier
 var provider expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetProviderAndWait(provider)
 +openfeature.SetProviderAndWait(context.TODO(), provider) 
@@ -88,7 +94,7 @@ import openfeature "go.openfeature.dev/openfeature/v2"
 var openfeature identifier
 var ctx, provider expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetProviderWithContextAndWait(ctx, provider)
 +openfeature.SetProviderAndWait(ctx, provider)
@@ -97,33 +103,42 @@ import openfeature "go.openfeature.dev/openfeature/v2"
 var openfeature identifier
 var provider, domain expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetNamedProvider(domain, provider) 
-+openfeature.SetNamedProvider(context.TODO(), domain, provider) 
++openfeature.SetProvider(ctx, provider, openfeature.WithDomain(domain))
+
+@@
+var openfeature identifier
+var provider, domain expression
+@@
+import openfeature "github.com/open-feature/go-sdk/openfeature"
+
+-openfeature.SetNamedProviderAndWait(domain, provider)
++openfeature.SetProviderAndWait(context.TODO(), provider, openfeature.WithDomain(domain))
 
 @@
 var openfeature identifier
 var ctx, provider, domain expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetNamedProviderWithContext(ctx, domain, provider)
-+openfeature.SetNamedProvider(ctx, domain, provider)
++openfeature.SetProvider(ctx, provider, openfeature.WithDomain(domain))
 
 @@
 var openfeature identifier
 var ctx, provider, domain expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetNamedProviderWithContextAndWait(ctx, domain, provider)
-+openfeature.SetNamedProviderAndWait(ctx, domain, provider)
++openfeature.SetProviderAndWait(ctx, provider, openfeature.WithDomain(domain))
 
 @@
 var openfeature identifier
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.Shutdown()
 +openfeature.Shutdown(context.TODO())
@@ -132,7 +147,7 @@ import openfeature "go.openfeature.dev/openfeature/v2"
 var openfeature identifier
 var ctx expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.ShutdownWithContext(ctx)
 +openfeature.Shutdown(ctx)
@@ -368,17 +383,9 @@ var x, multi identifier
 multi.x
 
 @@
-var x, openfeature identifier
-@@
--import openfeature "github.com/open-feature/go-sdk/openfeature"
-+import openfeature "go.openfeature.dev/openfeature/v2"
-
-openfeature.x
-
-@@
 var openfeature identifier
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.NewClient("")
 +openfeature.NewClient()
@@ -387,7 +394,7 @@ import openfeature "go.openfeature.dev/openfeature/v2"
 var openfeature identifier
 var domain expression
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.NewClient(domain)
 +openfeature.NewClient(openfeature.WithDomain(domain))
@@ -395,34 +402,25 @@ import openfeature "go.openfeature.dev/openfeature/v2"
 @@
 var openfeature identifier
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.NewDefaultClient()
 +openfeature.NewClient()
 
 @@
-var ctx, domain, provider expression
-var openfeature identifier
-@@
-import openfeature "go.openfeature.dev/openfeature/v2"
-
--openfeature.SetNamedProvider(ctx, domain, provider)
-+openfeature.SetProvider(ctx, provider, openfeature.WithDomain(domain))
-
-@@
-var ctx, domain, provider expression
-var openfeature identifier
-@@
-import openfeature "go.openfeature.dev/openfeature/v2"
-
--openfeature.SetNamedProviderAndWait(ctx, domain, provider)
-+openfeature.SetProviderAndWait(ctx, provider, openfeature.WithDomain(domain))
-
-@@
 var domain expression
 var openfeature identifier
 @@
-import openfeature "go.openfeature.dev/openfeature/v2"
+import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.NamedProviderMetadata(domain)
 +openfeature.ProviderMetadata(openfeature.WithDomain(domain))
+
+@@
+var x, openfeature identifier
+@@
+-import openfeature "github.com/open-feature/go-sdk/openfeature"
++import openfeature "go.openfeature.dev/openfeature/v2"
+
+openfeature.x
+
