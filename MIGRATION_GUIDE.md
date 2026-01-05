@@ -149,43 +149,64 @@ func (p *MyProvider) Shutdown(ctx context.Context) error {
 // Async setup (non-blocking)
 api.SetProvider(provider)
 api.SetProviderWithContext(ctx, provider)
-api.SetNamedProvider(clientName, provider, async)
-api.SetNamedProviderWithContext(ctx, clientName, provider, async)
+api.SetNamedProvider(domain, provider)
+api.SetNamedProviderWithContext(ctx, domain, provider)
 
 // Sync setup (blocking)
 api.SetProviderAndWait(provider)
 api.SetProviderAndWaitWithContext(ctx, provider)
-api.SetNamedProviderWithContextAndWait(ctx, clientName, provider)
+api.SetNamedProviderAndWait(domain, provider)
+api.SetNamedProviderWithContextAndWait(ctx, domain, provider)
 ```
 
 **v2:**
 
 ```go
-// All methods now require context
-api.SetProvider(ctx, provider)                           // async
-api.SetProviderAndWait(ctx, provider)                    // sync
-api.SetNamedProvider(ctx, clientName, provider)          // async
-api.SetNamedProviderAndWait(ctx, clientName, provider)   // sync
+// All methods now require context and use options
+api.SetProvider(ctx, provider)                                            // async
+api.SetProviderAndWait(ctx, provider)                                     // sync
+api.SetProvider(ctx, provider, openfeature.WithDomain(domain))            // async with domain
+api.SetProviderAndWait(ctx, provider, openfeature.WithDomain(domain))     // sync with domain
 ```
 
 **Migration Path:**
 
 ```go
-// v1
+// v1: Async without context
 api.SetProvider(provider)
 
-// v2: Explicit context required
-api.SetProvider(context.Background(), provider)
+// v2: Explicit context required (use context.TODO() if no timeout needed)
+api.SetProvider(context.TODO(), provider)
 
-// v1: With timeout
+// v1: Async with context
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
 api.SetProviderWithContext(ctx, provider)
 
-// v2: Same pattern
+// v2: Same pattern - context is now required
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 defer cancel()
 api.SetProvider(ctx, provider)
+
+// v1: Named provider (domain-specific)
+api.SetNamedProvider("user-service", userProvider)
+api.SetNamedProviderWithContext(ctx, "user-service", userProvider)
+
+// v2: Use WithDomain option
+api.SetProvider(context.TODO(), userProvider, openfeature.WithDomain("user-service"))
+api.SetProvider(ctx, userProvider, openfeature.WithDomain("user-service"))
+
+// v1: Sync operations
+api.SetProviderAndWait(provider)
+api.SetProviderAndWaitWithContext(ctx, provider)
+api.SetNamedProviderAndWait("user-service", userProvider)
+api.SetNamedProviderWithContextAndWait(ctx, "user-service", userProvider)
+
+// v2: Sync with context and domain option
+api.SetProviderAndWait(context.TODO(), provider)
+api.SetProviderAndWait(ctx, provider)
+api.SetProviderAndWait(context.TODO(), userProvider, openfeature.WithDomain("user-service"))
+api.SetProviderAndWait(ctx, userProvider, openfeature.WithDomain("user-service"))
 ```
 
 ---
@@ -401,6 +422,8 @@ api.OnProviderReady(func(details EventDetails) {
 
 ---
 
+---
+
 ### 10. **Interface Visibility Changes**
 
 **v1:**
@@ -420,48 +443,52 @@ type DetailEvaluator interface { ...} // Public, focused interface
 
 Internal interfaces are now private. Use the provided public interfaces instead.
 
-### 11. **Simplified Multi-Domain API (SetNamedProvider/SetNamedProviderAndWait Consolidation)**
+---
+
+### 11. **Client Creation and Metadata API**
 
 **v1:**
 
 ```go
-// Named provider functions (separate API)
-api.SetNamedProvider(ctx, "domain-name", provider)
-api.SetNamedProviderAndWait(ctx, "domain-name", provider)
-api.NamedProviderMetadata("domain-name")
-
-// Client creation with domain
+// Client creation with positional domain argument
 client := openfeature.NewClient("domain-name")
 client := openfeature.NewDefaultClient()  // Default domain client
+
+// Named provider metadata
+metadata := api.NamedProviderMetadata("domain-name")
 ```
 
 **v2:**
 
 ```go
-// Unified API with WithDomain option
-api.SetProvider(ctx, provider, openfeature.WithDomain("domain-name"))
-api.SetProviderAndWait(ctx, provider, openfeature.WithDomain("domain-name"))
-api.ProviderMetadata(openfeature.WithDomain("domain-name"))
-
-// Client creation unified
+// Client creation using WithDomain option
 client := openfeature.NewClient(openfeature.WithDomain("domain-name"))
 client := openfeature.NewClient()  // Default domain client (no argument needed)
+
+// Unified provider metadata
+metadata := api.ProviderMetadata(openfeature.WithDomain("domain-name"))
 ```
 
 **Key Differences:**
 
-- `SetNamedProvider()`, `SetNamedProviderAndWait()`, and `NamedProviderMetadata()` are removed
-- All provider registration now uses `SetProvider()` and `SetProviderAndWait()` with the `WithDomain()` option
-- `NewDefaultClient()` is replaced with `NewClient()` (no arguments returns default domain)
-- `NewClient(domainName)` is replaced with `NewClient(WithDomain(domainName))`
+- `NewClient(domainName)` → `NewClient(openfeature.WithDomain(domainName))` - domain now passed as option
+- `NewDefaultClient()` → `NewClient()` - simplified to single method
+- `NamedProviderMetadata(domain)` → `ProviderMetadata(openfeature.WithDomain(domain))` - unified with default metadata API
 - Domain is now specified as a `CallOption` rather than a positional string argument
 
-**Benefits:**
+**Migration Path:**
 
-- Simpler, more consistent API surface
-- Uses functional options pattern for extensibility
-- Single set of functions for both default and named providers
-- Clearer intent with explicit `WithDomain()` calls
+```go
+// v1: Domain as positional argument
+client := openfeature.NewClient("user-service")
+defaultClient := openfeature.NewDefaultClient()
+metadata := api.NamedProviderMetadata("user-service")
+
+// v2: Domain as option
+client := openfeature.NewClient(openfeature.WithDomain("user-service"))
+defaultClient := openfeature.NewClient()
+metadata := api.ProviderMetadata(openfeature.WithDomain("user-service"))
+```
 
 ---
 
