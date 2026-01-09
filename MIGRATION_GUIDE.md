@@ -55,7 +55,7 @@ type IClient interface {
 **v2:**
 
 - `IClient` is now private (`iClient`) and split into composable interfaces
-- Value methods (e.g., `BooleanValue`, `StringValue`) **removed**. Use `BooleanValueDetails`, `StringValueDetails`, etc. instead
+- Value methods that return `(value, error)` (e.g., `BooleanValue`, `StringValue`) **removed**. Use `Boolean`, `String`, etc. (non-error) or `BooleanValueDetails`, `StringValueDetails`, etc. (with metadata) instead
 - `State()` method removed; use `IEventing` methods directly
 
 **Migration Path:**
@@ -126,16 +126,13 @@ type MyProvider struct {
 
 func (p *MyProvider) Init(ctx context.Context) error {
     evalCtx := openfeature.EvaluationContextFromContext(ctx)
-    //...
-    return p.c.Ping(ctx)
+    // Use passed context directly, or create a new timeout context if needed
+    return nil// or err
 }
 
 func (p *MyProvider) Shutdown(ctx context.Context) error {
-    // Graceful shutdown with timeout
-    ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-    defer cancel()
-
-    return p.c.Close(ctx) // or implement graceful close
+    // Implement graceful close
+    return nil// or err
 }
 ```
 
@@ -509,7 +506,7 @@ go install github.com/uber-go/gopatch@latest
 The `openfeature_v1_to_v2.patch` file in this repository contains transformations for the most common breaking changes. Apply it to your codebase:
 
 ```sh
-gopatch -p openfeature_v1_to_v2.patch ./...
+gopatch -p ./openfeature_v1_to_v2.patch ./...
 ```
 
 #### What the patch covers
@@ -559,15 +556,11 @@ func (p *MyProvider) Shutdown() {
 
 // NEW
 func (p *MyProvider) Init(ctx context.Context) error {
-    // Use ctx for timeout control
-    ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-    defer cancel()
     // ...
+    return nil
 }
 
 func (p *MyProvider) Shutdown(ctx context.Context) error {
-    ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-    defer cancel()
     // ...
     return nil
 }
@@ -592,7 +585,7 @@ func (h *MyHook) Before(ctx context.Context, hookContext HookContext, hookHints 
 }
 ```
 
-Also rename `InterfaceEvaluationDetails` to `HookEvaluationDetails` in your `After` and `Finally` hook methods, and use `TransactionContext()` to retrieve the evaluation context from the context if needed.
+Also rename `InterfaceEvaluationDetails` to `HookEvaluationDetails` in your `After` and `Finally` hook methods, and use `EvaluationContextFromContext()` to retrieve the evaluation context from the context if needed.
 
 ### Step 3: Update Provider Setup Calls
 
@@ -607,7 +600,7 @@ api.SetNamedProvider("my-client", myProvider, true)
 // NEW
 api.SetProvider(context.Background(), myProvider)
 api.SetProviderAndWait(context.Background(), myProvider)
-api.SetNamedProvider(context.Background(), "my-client", myProvider)
+api.SetProvider(context.Background(), myProvider, openfeature.WithDomain("my-client"))
 ```
 
 ### Step 4: Update Shutdown Calls

@@ -11,7 +11,9 @@ import (
 	memprovider "go.openfeature.dev/openfeature/v2/providers/inmemory"
 )
 
-const testNameKey = "testName"
+type contextKey string
+
+const testNameKey contextKey = "testName"
 
 // NewProvider creates a new `TestAwareProvider`
 func NewProvider() TestProvider {
@@ -28,39 +30,47 @@ type TestProvider struct {
 	providers *sync.Map
 }
 
-type TestFramework = interface{ Name() string }
+type TestFramework = interface {
+	Name() string
+	Context() context.Context
+}
 
 // UsingFlags sets flags for the scope of a test.
-func (tp TestProvider) UsingFlags(test TestFramework, flags map[string]memprovider.InMemoryFlag) {
+func (tp TestProvider) UsingFlags(test TestFramework, flags map[string]memprovider.InMemoryFlag) context.Context {
 	storeGoroutineLocal(test.Name())
 	tp.providers.Store(test.Name(), memprovider.NewProvider(flags))
+	ctx := test.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, testNameKey, test.Name())
 }
 
 // Cleanup deletes the flags provider bound to the current test and should be executed after each test execution
 // e.g. using a defer statement.
-func (tp TestProvider) Cleanup() {
+func (tp TestProvider) Cleanup(context.Context) {
 	tp.providers.Delete(getGoroutineLocal())
 	deleteGoroutineLocal()
 }
 
 func (tp TestProvider) BooleanEvaluation(ctx context.Context, flag string, defaultValue bool, flatCtx openfeature.FlattenedContext) openfeature.BoolResolutionDetail {
-	return tp.getProvider().BooleanEvaluation(ctx, flag, defaultValue, flatCtx)
+	return tp.getProvider(ctx).BooleanEvaluation(ctx, flag, defaultValue, flatCtx)
 }
 
 func (tp TestProvider) StringEvaluation(ctx context.Context, flag string, defaultValue string, flatCtx openfeature.FlattenedContext) openfeature.StringResolutionDetail {
-	return tp.getProvider().StringEvaluation(ctx, flag, defaultValue, flatCtx)
+	return tp.getProvider(ctx).StringEvaluation(ctx, flag, defaultValue, flatCtx)
 }
 
 func (tp TestProvider) FloatEvaluation(ctx context.Context, flag string, defaultValue float64, flatCtx openfeature.FlattenedContext) openfeature.FloatResolutionDetail {
-	return tp.getProvider().FloatEvaluation(ctx, flag, defaultValue, flatCtx)
+	return tp.getProvider(ctx).FloatEvaluation(ctx, flag, defaultValue, flatCtx)
 }
 
 func (tp TestProvider) IntEvaluation(ctx context.Context, flag string, defaultValue int64, flatCtx openfeature.FlattenedContext) openfeature.IntResolutionDetail {
-	return tp.getProvider().IntEvaluation(ctx, flag, defaultValue, flatCtx)
+	return tp.getProvider(ctx).IntEvaluation(ctx, flag, defaultValue, flatCtx)
 }
 
 func (tp TestProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue any, flatCtx openfeature.FlattenedContext) openfeature.ObjectResolutionDetail {
-	return tp.getProvider().ObjectEvaluation(ctx, flag, defaultValue, flatCtx)
+	return tp.getProvider(ctx).ObjectEvaluation(ctx, flag, defaultValue, flatCtx)
 }
 
 func (tp TestProvider) Hooks() []openfeature.Hook {
@@ -71,11 +81,14 @@ func (tp TestProvider) Metadata() openfeature.Metadata {
 	return tp.NoopProvider.Metadata()
 }
 
-func (tp TestProvider) getProvider() openfeature.FeatureProvider {
+func (tp TestProvider) getProvider(ctx context.Context) openfeature.FeatureProvider {
 	// Retrieve the test name from the goroutine-local storage.
-	testName, ok := getGoroutineLocal().(string)
+	testName, ok := ctx.Value(testNameKey).(string)
 	if !ok {
-		panic("unable to detect test name; be sure to call `UsingFlags`	in the scope of a test (in T.run)!")
+		testName, ok = getGoroutineLocal().(string)
+		if !ok {
+			panic("unable to detect test name; be sure to call `UsingFlags`	in the scope of a test (in T.run)!")
+		}
 	}
 
 	// Load the feature provider corresponding to the test name.

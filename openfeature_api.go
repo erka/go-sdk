@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"sync"
@@ -158,8 +159,9 @@ func (api *evaluationAPI) initNewAndShutdownOld(ctx context.Context, clientName 
 	}
 
 	go func(forShutdown StateHandler, parentCtx context.Context) {
-		// FIXME: what to do with this error? slog?
-		_ = forShutdown.Shutdown(parentCtx)
+		if err := forShutdown.Shutdown(parentCtx); err != nil {
+			slog.Error("async provider shutdown failed", slog.Any("error", err))
+		}
 	}(v, ctx)
 
 	return nil

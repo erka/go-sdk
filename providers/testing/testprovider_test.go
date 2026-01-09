@@ -1,8 +1,13 @@
 package testing
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.openfeature.dev/openfeature/v2"
 	memprovider "go.openfeature.dev/openfeature/v2/providers/inmemory"
 )
@@ -48,7 +53,7 @@ func TestParallelSingletonUsage(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			defer testProvider.Cleanup()
+			defer testProvider.Cleanup(t.Context())
 			t.Parallel()
 			testProvider.UsingFlags(t, tt.flags)
 
@@ -153,6 +158,60 @@ func Test_TestAwareProviderPanics(t *testing.T) {
 		taw := NewProvider()
 		taw.BooleanEvaluation(t.Context(), "my-flag", true, openfeature.FlattenedContext{})
 	})
+}
+
+func TestServeWithAnotherGoroutine(t *testing.T) {
+	testProvider := NewProvider()
+	ctx := testProvider.UsingFlags(t, map[string]memprovider.InMemoryFlag{
+		"myflag": {
+			DefaultVariant: "defaultVariant",
+			Variants:       map[string]any{"defaultVariant": true},
+		},
+	})
+	t.Cleanup(func() {
+		testProvider.Cleanup(ctx)
+	})
+
+	err := openfeature.SetProviderAndWait(ctx, testProvider)
+	require.NoError(t, err)
+
+	handlerDone := make(chan struct{})
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		_ = openfeature.NewClient().Boolean(ctx, "myflag", false, openfeature.EvaluationContextFromContext(ctx))
+
+		select {
+		case <-r.Context().Done():
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+		close(handlerDone)
+	}
+
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/drain", nil)
+	w := httptest.NewRecorder()
+
+	// Start the handler in a goroutine for _reasons_
+	// This is what triggers the TestProvider bug
+	go func() {
+		handler(w, req)
+	}()
+
+	timedout := false
+
+	// Wait for handler to complete
+	select {
+	case <-handlerDone:
+		assert.Equal(t, http.StatusOK, w.Code)
+	case <-time.After(time.Second):
+		t.Log("drain not completed within timeout")
+		timedout = true
+	}
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	require.False(t, timedout)
 }
 
 func functionUnderTest(tb testing.TB) bool {

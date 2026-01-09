@@ -33,7 +33,7 @@ var value, err, client identifier
 @@
 -value, err = client.IntValue(...)
 +value = client.Int(...)
-# FloatValuel
+# FloatValue
 @@
 var value, err, client identifier
 @@
@@ -106,7 +106,7 @@ var provider, domain expression
 import openfeature "github.com/open-feature/go-sdk/openfeature"
 
 -openfeature.SetNamedProvider(domain, provider) 
-+openfeature.SetProvider(ctx, provider, openfeature.WithDomain(domain))
++openfeature.SetProvider(context.TODO(), provider, openfeature.WithDomain(domain))
 
 @@
 var openfeature identifier
@@ -210,7 +210,7 @@ flagd.x
 @@
 var x, flagsmith identifier
 @@
--import flagsmith "github.com/open-feature/go-sdk-contrib/providers/configcat/pkg"
+-import flagsmith "github.com/open-feature/go-sdk-contrib/providers/flagsmith/pkg"
 +import flagsmith "go.openfeature.dev/contrib/providers/flagsmith/v2/pkg"
 
 flagsmith.x
