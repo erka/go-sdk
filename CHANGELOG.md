@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/erka/go-sdk/compare/v1.0.0...v1.0.1) (2026-04-13)
+
+
+### 🐛 Bug Fixes
+
+* revert changes ([#6](https://github.com/erka/go-sdk/issues/6)) ([a890239](https://github.com/erka/go-sdk/commit/a8902393f1748622bac59f45b1018339c555c7a0))
+
 ## [1.0.0](https://github.com/erka/go-sdk/compare/v1.17.2...v1.0.0) (2026-04-13)
 
 
