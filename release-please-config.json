@@ -7,6 +7,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "extra-files": ["README.md"],
+      "release-as": "1.18.0",
       "changelog-sections": [
         {
           "type": "fix",
@@ -64,3 +65,4 @@
     }
   }
 }
+
